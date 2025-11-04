@@ -1,2 +1,7 @@
 # Ignore all CSV files in the data directory
 /data/*.csv
+venv/
+bin/
+results/
+visualizations/
+__pycache__/
