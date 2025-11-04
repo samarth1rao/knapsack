@@ -11,24 +11,30 @@ ALGO_DIRS = 01-bruteforce 02-memoization 03-dynamicprogramming 04-branchandbound
             09-billionscale 10-geneticalgorithm
 
 # Explicit targets we currently build
-TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/dynamicprogramming
+TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming
 
 # Create bin directory if it doesn't exist
 $(shell mkdir -p $(TARGET_DIR))
 
-.PHONY: all clean bruteforce dynamicprogramming help
+.PHONY: all clean bruteforce memoization dynamicprogramming help
 
 # Default: build all explicit targets
 all: $(TARGETS)
 
 # Convenience single-target aliases
 bruteforce: $(TARGET_DIR)/bruteforce
+memoization: $(TARGET_DIR)/memoization
 dynamicprogramming: $(TARGET_DIR)/dynamicprogramming
 
 $(TARGET_DIR)/bruteforce: 01-bruteforce/bruteforce.cpp
 	@echo "Compiling Brute Force algorithm..."
 	$(CXX) $(CXXFLAGS) -o $@ $<
 	@echo "Brute Force compiled successfully!"
+
+$(TARGET_DIR)/memoization: 02-memoization/memoization.cpp
+	@echo "Compiling Memoization algorithm..."
+	$(CXX) $(CXXFLAGS) -o $@ $<
+	@echo "Memoization compiled successfully!"
 
 $(TARGET_DIR)/dynamicprogramming: 03-dynamicprogramming/dynamicprogramming.cpp
 	@echo "Compiling Dynamic Programming algorithm..."
@@ -50,8 +56,8 @@ clean:
 help:
 	@echo "Knapsack Algorithms Makefile"
 	@echo "Usage:"
-	@echo "  make all                    - Compile all explicit algorithms (bruteforce, dynamicprogramming)"
-	@echo "  make <name>                 - Compile a single algorithm, e.g. 'make bruteforce' or 'make dynamicprogramming'"
+	@echo "  make all                    - Compile all explicit algorithms (bruteforce, memoization, dynamicprogramming)"
+	@echo "  make <name>                 - Compile a single algorithm, e.g. 'make bruteforce', 'make memoization', or 'make dynamicprogramming'"
 	@echo "  make clean                  - Remove all compiled binaries"
 	@echo "  make help                   - Display this help message"
 	@echo "Notes: Add a new algorithm by placing its source in a numbered subdirectory (e.g. 11-newalgo/newalgo.cpp) and either add an explicit rule to this Makefile or rely on the generic pattern rule. The produced executable should be placed in $(TARGET_DIR) and named after the folder (or your chosen key)."

@@ -41,6 +41,10 @@ class KnapsackSimulator:
                 'executable': self.algorithms_path / 'bin' / 'bruteforce',
                 'name': 'Brute Force'
             },
+            'memoization': {
+                'executable': self.algorithms_path / 'bin' / 'memoization',
+                'name': 'Memoization'
+            },
             'dynamicprogramming': {
                 'executable': self.algorithms_path / 'bin' / 'dynamicprogramming',
                 'name': 'Dynamic Programming'
