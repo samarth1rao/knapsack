@@ -54,6 +54,10 @@ class KnapsackSimulator:
                 "executable": self.algorithms_path / "bin" / "dynamicprogramming",
                 "name": "Dynamic Programming",
             },
+            "geneticalgorithm": {
+                "executable": self.algorithms_path / "bin" / "geneticalgorithm",
+                "name": "Genetic Algorithm",
+            },
             # Add more algorithms as they are implemented
         }
         # Base timeout (seconds) used as part of adaptive timeout calculation

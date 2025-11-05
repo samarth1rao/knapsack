@@ -1,7 +1,12 @@
+# ignore datasets
 /data/*.csv
+# ignore results and visualisations
 /simulation/results/
 /simulation/visualizations/
+# ignore environment files
+**/.vscode/
 **/.venv/
 **/venv/
+# ignore compiled python files
 **/bin/
 **/__pycache__/
