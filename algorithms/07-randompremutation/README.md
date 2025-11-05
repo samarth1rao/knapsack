@@ -1,5 +1,6 @@
 # Random Permutation
 
+It’s actually a randomized exact algorithm that runs faster with high probability (w.h.p.), meaning that it gives the exact optimal solution almost always, but not deterministically in every single run.
 
 ### Reference Article
 For reference, section 2 of https://arxiv.org/pdf/2308.11307  
