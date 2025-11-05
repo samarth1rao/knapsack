@@ -62,6 +62,10 @@ class KnapsackSimulator:
                 "executable": self.algorithms_path / "bin" / "geneticalgorithm",
                 "name": "Genetic Algorithm",
             },
+            "meetinthemiddle": {
+                "executable": self.algorithms_path / "bin" / "meetinthemiddle",
+                "name": "Meet in the Middle",
+            },
             # Add more algorithms as they are implemented
         }
         # Base timeout (seconds) used as part of adaptive timeout calculation

@@ -11,12 +11,19 @@ ALGO_DIRS = 01-bruteforce 02-memoization 03-dynamicprogramming 04-branchandbound
             09-billionscale 10-geneticalgorithm
 
 # Explicit targets we currently build
-TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming $(TARGET_DIR)/randompermutation $(TARGET_DIR)/geneticalgorithm
+TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming $(TARGET_DIR)/randompermutation $(TARGET_DIR)/geneticalgorithm $(TARGET_DIR)/meetinthemiddle
 
 # Create bin directory if it doesn't exist
 $(shell mkdir -p $(TARGET_DIR))
 
-.PHONY: all clean bruteforce memoization dynamicprogramming randompermutation geneticalgorithm help
+.PHONY: all clean bruteforce memoization dynamicprogramming randompermutation geneticalgorithm meetinthemiddle help
+# Convenience single-target alias
+meetinthemiddle: $(TARGET_DIR)/meetinthemiddle
+
+$(TARGET_DIR)/meetinthemiddle: 05-meetinthemiddle/algo.cpp
+	@echo "Compiling Meet in the Middle algorithm..."
+	$(CXX) $(CXXFLAGS) -o $@ $<
+	@echo "Meet in the Middle compiled successfully!"
 
 # Default: build all explicit targets
 all: $(TARGETS)
