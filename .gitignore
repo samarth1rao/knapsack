@@ -10,3 +10,4 @@
 # ignore compiled python files
 **/bin/
 **/__pycache__/
+wrongvenv/

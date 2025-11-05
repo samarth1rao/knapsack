@@ -11,12 +11,12 @@ ALGO_DIRS = 01-bruteforce 02-memoization 03-dynamicprogramming 04-branchandbound
             09-billionscale 10-geneticalgorithm
 
 # Explicit targets we currently build
-TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming $(TARGET_DIR)/geneticalgorithm
+TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming $(TARGET_DIR)/randompermutation $(TARGET_DIR)/geneticalgorithm
 
 # Create bin directory if it doesn't exist
 $(shell mkdir -p $(TARGET_DIR))
 
-.PHONY: all clean bruteforce memoization dynamicprogramming geneticalgorithm help
+.PHONY: all clean bruteforce memoization dynamicprogramming randompermutation geneticalgorithm help
 
 # Default: build all explicit targets
 all: $(TARGETS)
@@ -25,6 +25,7 @@ all: $(TARGETS)
 bruteforce: $(TARGET_DIR)/bruteforce
 memoization: $(TARGET_DIR)/memoization
 dynamicprogramming: $(TARGET_DIR)/dynamicprogramming
+randompermutation: $(TARGET_DIR)/randompermutation
 geneticalgorithm: $(TARGET_DIR)/geneticalgorithm
 
 $(TARGET_DIR)/bruteforce: 01-bruteforce/bruteforce.cpp
@@ -41,6 +42,11 @@ $(TARGET_DIR)/dynamicprogramming: 03-dynamicprogramming/dynamicprogramming.cpp
 	@echo "Compiling Dynamic Programming algorithm..."
 	$(CXX) $(CXXFLAGS) -o $@ $<
 	@echo "Dynamic Programming compiled successfully!"
+
+$(TARGET_DIR)/randompermutation: 07-randompremutation/randompermutation.cpp
+	@echo "Compiling Random Permutation algorithm..."
+	$(CXX) $(CXXFLAGS) -o $@ $<
+	@echo "Random Permutation compiled successfully!"
 
 $(TARGET_DIR)/geneticalgorithm: 10-geneticalgorithm/geneticalgorithm.cpp
 	@echo "Compiling Genetic Algorithm..."
@@ -62,8 +68,8 @@ clean:
 help:
 	@echo "Knapsack Algorithms Makefile"
 	@echo "Usage:"
-	@echo "  make all                    - Compile all explicit algorithms (bruteforce, memoization, dynamicprogramming, geneticalgorithm)"
-	@echo "  make <name>                 - Compile a single algorithm, e.g. 'make bruteforce', 'make memoization', 'make dynamicprogramming', or 'make geneticalgorithm'"
+	@echo "  make all                    - Compile all explicit algorithms (bruteforce, memoization, dynamicprogramming, randompermutation, geneticalgorithm)"
+	@echo "  make <name>                 - Compile a single algorithm, e.g. 'make bruteforce', 'make memoization', 'make dynamicprogramming', 'make randompermutation', or 'make geneticalgorithm'"
 	@echo "  make clean                  - Remove all compiled binaries"
 	@echo "  make help                   - Display this help message"
 	@echo "Notes: Add a new algorithm by placing its source in a numbered subdirectory (e.g. 11-newalgo/newalgo.cpp) and either add an explicit rule to this Makefile or rely on the generic pattern rule. The produced executable should be placed in $(TARGET_DIR) and named after the folder (or your chosen key)."
