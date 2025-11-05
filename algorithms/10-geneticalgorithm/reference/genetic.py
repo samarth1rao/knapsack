@@ -85,7 +85,7 @@ def crossover(parents: List[Individual]) -> List[Individual]:
     return [Individual(child1), Individual(child2)]
 
 
-def mutate(individuals: List[Individual]) -> List[Individual]:
+def mutate(individuals: List[Individual]) -> List[Individual] | None:
     for individual in individuals:
         for i in range(len(individual.bits)):
             if random.random() < MUTATION_RATE:

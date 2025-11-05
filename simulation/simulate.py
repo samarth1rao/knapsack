@@ -58,13 +58,13 @@ class KnapsackSimulator:
                 "executable": self.algorithms_path / "bin" / "randompermutation",
                 "name": "Random Permutation",
             },
-            "geneticalgorithm": {
-                "executable": self.algorithms_path / "bin" / "geneticalgorithm",
-                "name": "Genetic Algorithm",
-            },
             "meetinthemiddle": {
                 "executable": self.algorithms_path / "bin" / "meetinthemiddle",
                 "name": "Meet in the Middle",
+            },
+            "geneticalgorithm": {
+                "executable": self.algorithms_path / "bin" / "geneticalgorithm",
+                "name": "Genetic Algorithm",
             },
             # Add more algorithms as they are implemented
         }
@@ -112,9 +112,9 @@ class KnapsackSimulator:
             # Determine an adaptive timeout based on problem size n.
             # Heuristic: base + (per_item * n), capped to a reasonable maximum.
             per_item = 0.5  # seconds per item (heuristic)
-            timeout_seconds = min(
-                120.0, max(2.0, self.base_timeout_seconds + per_item * float(n))
-            )
+            timeout_seconds = 12  # min(
+            #     120.0, max(2.0, self.base_timeout_seconds + per_item * float(n))
+            # )
 
             # Build the command. On Windows, prefer running via WSL when executable is a *nix binary.
             if platform.system() == "Windows" and shutil.which("wsl"):
@@ -614,7 +614,7 @@ def main():
     simulator = KnapsackSimulator(base_path)
 
     # Run simulation for Tiny category
-    category = "Tiny"
+    category = "Combined"
     print(f"\nRunning simulation for category: {category}")
     results_df = simulator.simulate_all(category=category)
 
