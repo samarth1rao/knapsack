@@ -54,6 +54,10 @@ class KnapsackSimulator:
                 "executable": self.algorithms_path / "bin" / "dynamicprogramming",
                 "name": "Dynamic Programming",
             },
+            "randompermutation": {
+                "executable": self.algorithms_path / "bin" / "randompermutation",
+                "name": "Random Permutation",
+            },
             "geneticalgorithm": {
                 "executable": self.algorithms_path / "bin" / "geneticalgorithm",
                 "name": "Genetic Algorithm",
