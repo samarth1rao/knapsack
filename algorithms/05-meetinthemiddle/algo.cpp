@@ -14,6 +14,7 @@ struct SubsetR {
 };
 
 
+
 int main() {
     int n, capacity;
     cin >> n >> capacity;
@@ -21,9 +22,20 @@ int main() {
     for (int i = 0; i < n; ++i) cin >> weights[i];
     for (int i = 0; i < n; ++i) cin >> values[i];
 
+    // Hard limit for n1/n2 to avoid time/memory blowup
+    int n1 = n / 2, n2 = n - n1;
+    if (n1 > 24 || n2 > 24) {
+        // Output error code for simulation harness
+        cout << -1 << endl;
+        cout << 0 << endl;
+        cout << endl;
+        cout << 0 << endl;
+        cout << 0 << endl;
+        return 0;
+    }
+
     auto start = high_resolution_clock::now();
 
-    int n1 = n / 2, n2 = n - n1;
     vector<SubsetL> left;
     vector<SubsetR> right;
 
