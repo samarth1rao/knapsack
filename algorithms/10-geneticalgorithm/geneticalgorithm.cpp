@@ -363,13 +363,17 @@ Result solveKnapsackGenetic() {
     result.executionTime = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
     // Approximate memory usage.
-    size_t populationMemory =
-        2 * POPULATION_SIZE * sizeof(Individual) +
-        2 * POPULATION_SIZE * NUM_ITEMS * sizeof(char);
+    size_t populationMemory = 0;
+    for (const auto &ind : population) {
+        populationMemory += sizeof(Individual) + (ind.bits.capacity() * sizeof(char));
+    }
+    for (const auto &ind : nextPopulation) {
+        populationMemory += sizeof(Individual) + (ind.bits.capacity() * sizeof(char));
+    }
     size_t vectorMemory =
-        (sizeof(int) * (ITEM_WEIGHTS.size() + ITEM_VALUES.size())) +
-        (sizeof(int) * result.selectedItems.size()) +
-        (sizeof(ItemProperty) * SORTED_ITEMS.size());
+        (sizeof(int) * (ITEM_WEIGHTS.capacity() + ITEM_VALUES.capacity())) +
+        (sizeof(int) * result.selectedItems.capacity()) +
+        (sizeof(ItemProperty) * SORTED_ITEMS.capacity());
     result.memoryUsed = populationMemory + vectorMemory;
 
     return result;
