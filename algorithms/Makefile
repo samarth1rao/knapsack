@@ -11,7 +11,7 @@ ALGO_DIRS = 01-bruteforce 02-memoization 03-dynamicprogramming 04-branchandbound
             09-billionscale 10-geneticalgorithm
 
 # Explicit targets we currently build
-TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming $(TARGET_DIR)/randompermutation $(TARGET_DIR)/geneticalgorithm $(TARGET_DIR)/meetinthemiddle
+TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming $(TARGET_DIR)/randompermutation $(TARGET_DIR)/geneticalgorithm $(TARGET_DIR)/meetinthemiddle $(TARGET_DIR)/greedyheuristic
 
 # Create bin directory if it doesn't exist
 $(shell mkdir -p $(TARGET_DIR))
@@ -34,6 +34,7 @@ memoization: $(TARGET_DIR)/memoization
 dynamicprogramming: $(TARGET_DIR)/dynamicprogramming
 randompermutation: $(TARGET_DIR)/randompermutation
 geneticalgorithm: $(TARGET_DIR)/geneticalgorithm
+greedyheuristic: $(TARGET_DIR)/greedyheuristic
 
 $(TARGET_DIR)/bruteforce: 01-bruteforce/bruteforce.cpp
 	@echo "Compiling Brute Force algorithm..."
@@ -60,6 +61,11 @@ $(TARGET_DIR)/geneticalgorithm: 10-geneticalgorithm/geneticalgorithm.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $<
 	@echo "Genetic Algorithm compiled successfully!"
 
+$(TARGET_DIR)/greedyheuristic: 06-greedyheuristic/greedyheuristic.cpp
+	@echo "Compiling Greedy Heuristic algorithm..."
+	$(CXX) $(CXXFLAGS) -o $@ $<
+	@echo "Greedy Heuristic compiled successfully!"
+
 # Generic pattern rule (optional): compile any single-file cpp into bin/<basename>
 $(TARGET_DIR)/%: %/%.cpp
 	@echo "Compiling $< -> $@"
@@ -75,8 +81,8 @@ clean:
 help:
 	@echo "Knapsack Algorithms Makefile"
 	@echo "Usage:"
-	@echo "  make all                    - Compile all explicit algorithms (bruteforce, memoization, dynamicprogramming, randompermutation, geneticalgorithm)"
-	@echo "  make <name>                 - Compile a single algorithm, e.g. 'make bruteforce', 'make memoization', 'make dynamicprogramming', 'make randompermutation', or 'make geneticalgorithm'"
+	@echo "  make all                    - Compile all explicit algorithms (bruteforce, memoization, dynamicprogramming, randompermutation, geneticalgorithm, greedyheuristic)"
+	@echo "  make <name>                 - Compile a single algorithm, e.g. 'make bruteforce', 'make memoization', 'make dynamicprogramming', 'make randompermutation', 'make geneticalgorithm', or 'make greedyheuristic'"
 	@echo "  make clean                  - Remove all compiled binaries"
 	@echo "  make help                   - Display this help message"
 	@echo "Notes: Add a new algorithm by placing its source in a numbered subdirectory (e.g. 11-newalgo/newalgo.cpp) and either add an explicit rule to this Makefile or rely on the generic pattern rule. The produced executable should be placed in $(TARGET_DIR) and named after the folder (or your chosen key)."

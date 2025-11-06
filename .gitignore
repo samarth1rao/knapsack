@@ -12,3 +12,5 @@
 **/bin/
 **/__pycache__/
 wrongvenv/
+# ignore test files
+**/test_greedy.py

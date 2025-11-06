@@ -69,6 +69,10 @@ class KnapsackSimulator:
                 "executable": self.algorithms_path / "bin" / "meetinthemiddle",
                 "name": "Meet in the Middle",
             },
+            "greedyheuristic": {
+                "executable": self.algorithms_path / "bin" / "greedyheuristic",
+                "name": "Greedy Heuristic",
+            },
             "geneticalgorithm": {
                 "executable": self.algorithms_path / "bin" / "geneticalgorithm",
                 "name": "Genetic Algorithm",
@@ -112,6 +116,12 @@ class KnapsackSimulator:
             raise ValueError(f"Algorithm {algo_name} not found")
 
         executable = self.algorithms[algo_name]["executable"]
+
+        # Handle Windows .exe extension
+        if platform.system() == "Windows" and not executable.exists():
+            exe_path = executable.with_suffix('.exe')
+            if exe_path.exists():
+                executable = exe_path
 
         if not executable.exists():
             raise FileNotFoundError(f"Executable not found: {executable}")
@@ -673,7 +683,7 @@ def main():
     # --- Define the simulation runs here ---
     # Format: [dataset_name, category, optional_timeout_in_seconds]
     simulation_runs = [
-        ["knapsack_dataset.csv", "Tiny"],
+        ["knapsack_test_tiny.csv", "Tiny"],
         # ["knapsack_dataset_l012_400.csv", "Tiny", 4],
         # ["knapsack_dataset_l012_400.csv", "Small", 8],
         # ["knapsack_dataset_l012_400.csv", "Medium", 15],
