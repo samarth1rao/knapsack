@@ -110,6 +110,9 @@ void preSortItems() {
         if (ITEM_WEIGHTS[i] > 0) {
             SORTED_ITEMS[i].ratio = static_cast<double>(ITEM_VALUES[i]) / ITEM_WEIGHTS[i];
         }
+        else if (ITEM_VALUES[i] > 0) {
+            SORTED_ITEMS[i].ratio = std::numeric_limits<double>::infinity();
+        }
         else {
             SORTED_ITEMS[i].ratio = 0.0;
         }
