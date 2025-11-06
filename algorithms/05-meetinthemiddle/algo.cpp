@@ -16,6 +16,10 @@ struct SubsetR {
 
 
 int main() {
+    // Use fast I/O.
+    std::ios::sync_with_stdio(false);
+    std::cin.tie(nullptr);
+
     int n, capacity;
     cin >> n >> capacity;
     vector<int> weights(n), values(n);

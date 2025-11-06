@@ -21,7 +21,7 @@ struct Result {
  * @param values Const reference to the item values vector.
  * @return A Result struct containing the solution, time, and memory.
  */
-Result solveKnapsackDP(int capacity, const vector<int>& weights, const vector<int>& values) {
+Result solveKnapsackDP(int capacity, const vector<int> &weights, const vector<int> &values) {
     Result result;
     int n = weights.size();
 
@@ -87,13 +87,17 @@ Result solveKnapsackDP(int capacity, const vector<int>& weights, const vector<in
     // Approximate memory used by the DP table + input/output vectors
     size_t dpTableMemory = sizeof(int) * (n + 1) * (capacity + 1);
     size_t vectorMemory = (sizeof(int) * (weights.size() + values.size())) +
-                          (sizeof(int) * result.selectedItems.size());
+        (sizeof(int) * result.selectedItems.size());
     result.memoryUsed = dpTableMemory + vectorMemory;
 
     return result;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
+    // Use fast I/O.
+    std::ios::sync_with_stdio(false);
+    std::cin.tie(nullptr);
+
     // Read input from stdin
     int n, capacity;
     cin >> n >> capacity;

@@ -30,7 +30,7 @@ struct Result {
  * @param values Const reference to the item values vector.
  * @return A Result struct containing the solution, time, and memory.
  */
-Result solveKnapsackGreedy(int capacity, const vector<int>& weights, const vector<int>& values) {
+Result solveKnapsackGreedy(int capacity, const vector<int> &weights, const vector<int> &values) {
     Result result;
     int n = weights.size();
 
@@ -47,15 +47,15 @@ Result solveKnapsackGreedy(int capacity, const vector<int>& weights, const vecto
     }
 
     // Sort items by density in descending order (highest density first)
-    sort(items.begin(), items.end(), [](const Item& a, const Item& b) {
+    sort(items.begin(), items.end(), [](const Item &a, const Item &b) {
         return a.density > b.density;
-    });
+        });
 
     // Greedily select items
     int currentWeight = 0;
     int currentValue = 0;
 
-    for (const auto& item : items) {
+    for (const auto &item : items) {
         // If adding this item doesn't exceed capacity, add it
         if (currentWeight + item.weight <= capacity) {
             currentWeight += item.weight;
@@ -82,7 +82,11 @@ Result solveKnapsackGreedy(int capacity, const vector<int>& weights, const vecto
     return result;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
+    // Use fast I/O.
+    std::ios::sync_with_stdio(false);
+    std::cin.tie(nullptr);
+
     // Read input from stdin
     int n, capacity;
     cin >> n >> capacity;

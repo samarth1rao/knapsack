@@ -88,6 +88,10 @@ Result solveKnapsackBruteForce(int capacity, const vector<int>& weights, const v
 }
 
 int main(int argc, char* argv[]) {
+    // Use fast I/O.
+    std::ios::sync_with_stdio(false);
+    std::cin.tie(nullptr);
+
     // Read input from stdin
     int n, capacity;
     cin >> n >> capacity;
