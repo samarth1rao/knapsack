@@ -31,7 +31,7 @@ int main() {
         cout << endl;
         cout << 0 << endl;
         cout << 0 << endl;
-        return 0;
+        return 69;
     }
 
     auto start = high_resolution_clock::now();
@@ -48,7 +48,7 @@ int main() {
                 v += values[i];
             }
         }
-        left.push_back({w, v, mask});
+        left.push_back({ w, v, mask });
     }
 
     // Generate all subsets for right half (no mask)
@@ -60,13 +60,13 @@ int main() {
                 v += values[n1 + i];
             }
         }
-        right.push_back({w, v});
+        right.push_back({ w, v });
     }
 
     // Sort right by weight
     sort(right.begin(), right.end(), [](const SubsetR &a, const SubsetR &b) {
         return a.weight < b.weight;
-    });
+        });
 
     // Filter dominated pairs in right
     vector<SubsetR> filtered;
@@ -92,7 +92,8 @@ int main() {
             if (right[mid].weight <= rem) {
                 idx = mid;
                 lo = mid + 1;
-            } else {
+            }
+            else {
                 hi = mid - 1;
             }
         }
