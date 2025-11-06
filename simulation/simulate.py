@@ -6,6 +6,7 @@ Runs various knapsack algorithms and generates comprehensive visualizations
 
 import ast
 import json
+import logging
 import os
 import platform
 import re
@@ -26,6 +27,10 @@ plt.rcParams["figure.figsize"] = (12, 8)
 plt.rcParams["font.size"] = 10
 
 
+# Global logger
+logger = logging.getLogger(__name__)
+
+
 class KnapsackSimulator:
     def __init__(self, base_path):
         self.base_path = Path(base_path)
@@ -34,10 +39,12 @@ class KnapsackSimulator:
         self.simulation_path = self.base_path / "simulation"
         self.results_path = self.simulation_path / "results"
         self.visualization_path = self.simulation_path / "visualizations"
+        self.logs_path = self.simulation_path / "logs"
 
         # Create necessary directories
         self.results_path.mkdir(exist_ok=True)
         self.visualization_path.mkdir(exist_ok=True)
+        self.logs_path.mkdir(exist_ok=True)
 
         # Algorithm configurations
         # Add an entry for each executable placed in algorithms/bin
@@ -75,9 +82,13 @@ class KnapsackSimulator:
         """Parse string representation of list to actual list"""
         return ast.literal_eval(s)
 
-    def load_dataset(self, category="Tiny"):
+    def load_dataset(self, dataset_name="knapsack_dataset.csv", category="Tiny"):
         """Load knapsack dataset and filter by category"""
-        csv_path = self.data_path / "knapsack_dataset.csv"
+        csv_path = self.data_path / dataset_name
+        if not csv_path.exists():
+            logger.error(f"Dataset file not found: {csv_path}")
+            return None, 0
+
         df = pd.read_csv(csv_path)
         total_rows = len(df)
 
@@ -93,7 +104,9 @@ class KnapsackSimulator:
 
         return df_filtered, total_rows
 
-    def run_algorithm(self, algo_name, n, capacity, weights, values):
+    def run_algorithm(
+        self, algo_name, n, capacity, weights, values, custom_timeout=None
+    ):
         """Run a specific algorithm with given inputs"""
         if algo_name not in self.algorithms:
             raise ValueError(f"Algorithm {algo_name} not found")
@@ -115,6 +128,8 @@ class KnapsackSimulator:
             timeout_seconds = min(
                 120.0, max(2.0, self.base_timeout_seconds + per_item * float(n))
             )
+            if custom_timeout is not None:
+                timeout_seconds = custom_timeout
 
             # Build the command. On Windows, prefer running via WSL when executable is a *nix binary.
             if platform.system() == "Windows" and shutil.which("wsl"):
@@ -145,20 +160,20 @@ class KnapsackSimulator:
 
             if result.returncode != 0:
                 # Print stderr for diagnostics and return failure for this run.
-                print(f"Error running {algo_name}: {result.stderr.strip()}")
+                logger.error(f"Error running {algo_name}: {result.stderr.strip()}")
                 return None
 
             # Parse output safely. Expecting at least two lines (value and count), extras optional.
             out = result.stdout.strip()
             if not out:
-                print(f"No output from {algo_name}")
+                logger.warning(f"No output from {algo_name}")
                 return None
 
             lines = out.split("\n")
             try:
                 max_value = int(lines[0].strip())
             except Exception:
-                print(f"Unexpected output format from {algo_name}: {lines[:5]}")
+                logger.error(f"Unexpected output format from {algo_name}: {lines[:5]}")
                 return None
 
             # selected count
@@ -202,19 +217,26 @@ class KnapsackSimulator:
                 "success": True,
             }
         except subprocess.TimeoutExpired:
-            print(f"Algorithm {algo_name} timed out (>{timeout_seconds:.1f}s)")
+            logger.warning(f"Algorithm {algo_name} timed out (>{timeout_seconds:.1f}s)")
             return None
         except Exception as e:
-            print(f"Error running {algo_name}: {str(e)}")
+            logger.error(f"Error running {algo_name}: {str(e)}")
             return None
 
-    def simulate_all(self, category="Tiny"):
+    def simulate_all(self, dataset_name, category, custom_timeout=None):
         """Run all algorithms on the dataset"""
-        print(f"Loading {category} dataset...")
-        df, total_csv_rows = self.load_dataset(category)
-        print(f"Found {len(df)} test cases")
+        logger.info(f"Loading {category} dataset from {dataset_name}...")
+        df, total_csv_rows = self.load_dataset(dataset_name, category)
+        if df is None:
+            return None
+
+        # Sort instances by n
+        df.sort_values(by="n", inplace=True)
+        logger.info(f"Found {len(df)} test cases, sorted by problem size 'n'.")
 
         results = []
+        consecutive_failures = {algo: 0 for algo in self.algorithms.keys()}
+        excluded_algos = set()
 
         for counter, (idx, row) in enumerate(df.iterrows(), 1):
             n = row["n"]
@@ -224,8 +246,8 @@ class KnapsackSimulator:
             best_price = row["best_price"]
             seed = row["seed"]
 
-            print(
-                f"\nTest case {idx + 1}/{total_csv_rows} ({counter}/{len(df)}): n={n}, capacity={capacity}"
+            logger.info(
+                f"Test case {idx + 1}/{total_csv_rows} ({counter}/{len(df)}): n={n}, capacity={capacity}"
             )
 
             test_result = {
@@ -237,11 +259,27 @@ class KnapsackSimulator:
             }
 
             for algo_name in self.algorithms.keys():
-                print(f"  Running {self.algorithms[algo_name]['name']}...", end=" ")
+                if algo_name in excluded_algos:
+                    logger.info(
+                        f"  Skipping {self.algorithms[algo_name]['name']} (excluded after 3 consecutive failures)."
+                    )
+                    # Still need to add null results for this algo
+                    test_result[f"{algo_name}_value"] = None
+                    test_result[f"{algo_name}_time"] = None
+                    test_result[f"{algo_name}_memory"] = None
+                    test_result[f"{algo_name}_items"] = None
+                    test_result[f"{algo_name}_accuracy"] = None
+                    test_result[f"{algo_name}_optimal"] = False
+                    continue
 
-                result = self.run_algorithm(algo_name, n, capacity, weights, values)
+                logger.info(f"  Running {self.algorithms[algo_name]['name']}...")
+
+                result = self.run_algorithm(
+                    algo_name, n, capacity, weights, values, custom_timeout
+                )
 
                 if result:
+                    consecutive_failures[algo_name] = 0  # Reset on success
                     test_result[f"{algo_name}_value"] = result["max_value"]
                     test_result[f"{algo_name}_time"] = result["execution_time"]
                     test_result[f"{algo_name}_memory"] = result["memory_used"]
@@ -254,17 +292,26 @@ class KnapsackSimulator:
                     test_result[f"{algo_name}_optimal"] = (
                         result["max_value"] == best_price
                     )
-                    print(
-                        f"Value: {result['max_value']}, Time: {result['execution_time']}μs"
+                    logger.info(
+                        f"  -> Value: {result['max_value']}, Time: {result['execution_time']}μs"
                     )
                 else:
+                    consecutive_failures[algo_name] += 1
+                    logger.warning(
+                        f"  -> FAILED ({consecutive_failures[algo_name]} consecutive)"
+                    )
+                    if consecutive_failures[algo_name] >= 3:
+                        excluded_algos.add(algo_name)
+                        logger.critical(
+                            f"*** Algorithm {self.algorithms[algo_name]['name']} failed 3 times, excluding from further tests in this run. ***"
+                        )
+
                     test_result[f"{algo_name}_value"] = None
                     test_result[f"{algo_name}_time"] = None
                     test_result[f"{algo_name}_memory"] = None
                     test_result[f"{algo_name}_items"] = None
                     test_result[f"{algo_name}_accuracy"] = None
                     test_result[f"{algo_name}_optimal"] = False
-                    print("FAILED")
 
             results.append(test_result)
 
@@ -275,7 +322,7 @@ class KnapsackSimulator:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         results_file = self.results_path / f"results_{category}_{timestamp}.csv"
         results_df.to_csv(results_file, index=False)
-        print(f"\nResults saved to {results_file}")
+        logger.info(f"Results for {category} saved to {results_file}")
 
         return results_df
 
@@ -307,7 +354,7 @@ class KnapsackSimulator:
         # 6. Optimality Rate
         self._plot_optimality_rate(results_df, algo_list, viz_dir)
 
-        print(f"\nVisualizations saved to {viz_dir}")
+        logger.info(f"Visualizations saved to {viz_dir}")
 
     def _plot_time_vs_size(self, df, algorithms, viz_dir):
         """Plot execution time vs problem size"""
@@ -598,33 +645,65 @@ class KnapsackSimulator:
         plt.savefig(viz_dir / "summary_table.png", dpi=300, bbox_inches="tight")
         plt.close()
 
-        print("\nSummary Statistics:")
-        print(summary_df.to_string(index=False))
+        logger.info("Summary Statistics:")
+        logger.info(summary_df.to_string(index=False))
 
 
 def main():
     # Get the base path (parent of simulation folder)
     base_path = Path(__file__).parent.parent
 
-    print("=" * 60)
-    print("Knapsack Algorithm Simulation")
-    print("=" * 60)
+    # Setup logging
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = base_path / "simulation" / "logs"
+    log_dir.mkdir(exist_ok=True)  # Ensure log directory exists
+    log_file = log_dir / f"simulation_{timestamp}.log"
+
+    # Configure root logger
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)-8s] %(message)s",
+        handlers=[logging.FileHandler(log_file), logging.StreamHandler()],
+    )
+
+    logger.info("=" * 60)
+    logger.info("Knapsack Algorithm Simulation")
+    logger.info("=" * 60)
+
+    # --- Define the simulation runs here ---
+    # Format: [dataset_name, category, optional_timeout_in_seconds]
+    simulation_runs = [
+        ["knapsack_dataset.csv", "Tiny"],
+        # ["knapsack_dataset_l012_400.csv", "Tiny", 4],
+        # ["knapsack_dataset_l012_400.csv", "Small", 8],
+        # ["knapsack_dataset_l012_400.csv", "Medium", 15],
+        # ["knapsack_dataset_l3_20.csv", "Large", 600],
+    ]
 
     # Create simulator
     simulator = KnapsackSimulator(base_path)
 
-    # Run simulation for Tiny category
-    category = "Tiny"
-    print(f"\nRunning simulation for category: {category}")
-    results_df = simulator.simulate_all(category=category)
+    for run_config in simulation_runs:
+        # Unpack config
+        dataset_name = run_config[0]
+        category = run_config[1]
+        timeout = run_config[2] if len(run_config) > 2 else None
 
-    # Create visualizations
-    print("\nGenerating visualizations...")
-    simulator.create_visualizations(results_df, category=category)
+        logger.info(f"--- Running simulation for category: {category} ---")
+        if timeout:
+            logger.info(f"Using hardcoded timeout: {timeout}s")
 
-    print("\n" + "=" * 60)
-    print("Simulation completed successfully!")
-    print("=" * 60)
+        results_df = simulator.simulate_all(
+            dataset_name=dataset_name, category=category, custom_timeout=timeout
+        )
+
+        # Create visualizations
+        logger.info("Generating visualizations...")
+        simulator.create_visualizations(results_df, category=category)
+
+    logger.info("=" * 60)
+    logger.info("All simulations completed successfully!")
+    logger.info("=" * 60)
 
 
 if __name__ == "__main__":

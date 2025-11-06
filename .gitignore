@@ -1,6 +1,7 @@
 # ignore datasets
 /data/*.csv
 # ignore results and visualisations
+/simulation/logs/
 /simulation/results/
 /simulation/visualizations/
 # ignore environment files
