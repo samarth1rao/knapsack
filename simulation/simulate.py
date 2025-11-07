@@ -67,7 +67,7 @@ class KnapsackSimulator:
             "branchandbound": {
                 "executable": self.algorithms_path / "bin" / "branchandbound",
                 "name": "Branch and Bound",
-                "sort_key": lambda n, w: 2 ** n,  # Worst case exponential, but often much better
+                "sort_key": lambda n, w: n,  # 2**n,
             },
             "meetinthemiddle": {
                 "executable": self.algorithms_path / "bin" / "meetinthemiddle",
@@ -94,7 +94,6 @@ class KnapsackSimulator:
                 "name": "Genetic Algorithm",
                 "sort_key": lambda n, w: n,  # n * P * G,
             },
-            # Add more algorithms as they are implemented
         }
         # Base timeout (seconds) used as part of adaptive timeout calculation
         self.base_timeout_seconds = 10.0
@@ -278,7 +277,9 @@ class KnapsackSimulator:
         # Run each algorithm independently
         for algo_name, sorted_indices in run_orders.items():
             algo_display_name = self.algorithms[algo_name]["name"]
-            logger.info(f"\n{'=' * 60}\nRunning {algo_display_name}\n{'=' * 60}")
+            logger.info("=" * 60)
+            logger.info(f"Running Algorithm: {algo_display_name}")
+            logger.info("=" * 60)
 
             consecutive_failures = 0
             for test_count, idx in enumerate(sorted_indices, 1):

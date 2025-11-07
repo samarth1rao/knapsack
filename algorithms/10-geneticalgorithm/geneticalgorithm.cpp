@@ -278,9 +278,7 @@ void nextGeneration(const std::vector<Individual> &currentPop, std::vector<Indiv
     // Fill the rest of the next population.
     for (size_t i = 1; i < static_cast<size_t>(POPULATION_SIZE); ) {
         // Select two parents using tournament selection.
-        auto selection_result = selection(currentPop);
-        const Individual* parent1 = selection_result.first;
-        const Individual* parent2 = selection_result.second;
+        auto [parent1, parent2] = selection(currentPop);
 
         // Decide whether to reproduce directly or create offspring.
         if (probDist(rng) < REPRODUCTION_RATE) {
