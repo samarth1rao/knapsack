@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Knapsack Algorithm Simulation and Analysis
-Runs various knapsack algorithms and generates comprehensive visualizations
+Runs various knapsack algorithms and generates comprehensive visualisations
 """
 
 import ast
@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-# Set style for better visualizations
+# Set style for better visualisations
 sns.set_style("whitegrid")
 plt.rcParams["figure.figsize"] = (12, 8)
 plt.rcParams["font.size"] = 10
@@ -38,12 +38,12 @@ class KnapsackSimulator:
         self.data_path = self.base_path / "data"
         self.simulation_path = self.base_path / "simulation"
         self.results_path = self.simulation_path / "results"
-        self.visualization_path = self.simulation_path / "visualizations"
+        self.visualisation_path = self.simulation_path / "visualisations"
         self.logs_path = self.simulation_path / "logs"
 
         # Create necessary directories
         self.results_path.mkdir(exist_ok=True)
-        self.visualization_path.mkdir(exist_ok=True)
+        self.visualisation_path.mkdir(exist_ok=True)
         self.logs_path.mkdir(exist_ok=True)
 
         # Algorithm configurations
@@ -52,34 +52,42 @@ class KnapsackSimulator:
             "bruteforce": {
                 "executable": self.algorithms_path / "bin" / "bruteforce",
                 "name": "Brute Force",
+                "sort_key": lambda n, w: n,  # 2**n,
             },
             "memoization": {
                 "executable": self.algorithms_path / "bin" / "memoization",
                 "name": "Memoization",
+                "sort_key": lambda n, w: n * w,
             },
             "dynamicprogramming": {
                 "executable": self.algorithms_path / "bin" / "dynamicprogramming",
                 "name": "Dynamic Programming",
-            },
-            "randompermutation": {
-                "executable": self.algorithms_path / "bin" / "randompermutation",
-                "name": "Random Permutation",
+                "sort_key": lambda n, w: n * w,
             },
             "meetinthemiddle": {
                 "executable": self.algorithms_path / "bin" / "meetinthemiddle",
                 "name": "Meet in the Middle",
+                "sort_key": lambda n, w: n,  # (2 ** (n / 2)) * n,
             },
             "greedyheuristic": {
                 "executable": self.algorithms_path / "bin" / "greedyheuristic",
                 "name": "Greedy Heuristic",
+                "sort_key": lambda n, w: n,  # n * np.log(n),
+            },
+            "randompermutation": {
+                "executable": self.algorithms_path / "bin" / "randompermutation",
+                "name": "Random Permutation",
+                "sort_key": lambda n, w: (n**1.5) * w,
+            },
+            "billionscale": {
+                "executable": self.algorithms_path / "bin" / "billionscale",
+                "name": "Billion Scale",
+                "sort_key": lambda n, w: n,  # (n * M) + n * np.log(n),
             },
             "geneticalgorithm": {
                 "executable": self.algorithms_path / "bin" / "geneticalgorithm",
                 "name": "Genetic Algorithm",
-            },
-            "billionscale": {
-                "executable": self.algorithms_path / "bin" / "billionscale",
-                "name": "Billionscale",
+                "sort_key": lambda n, w: n,  # n * P * G,
             },
             # Add more algorithms as they are implemented
         }
@@ -123,7 +131,7 @@ class KnapsackSimulator:
 
         # Handle Windows .exe extension
         if platform.system() == "Windows" and not executable.exists():
-            exe_path = executable.with_suffix('.exe')
+            exe_path = executable.with_suffix(".exe")
             if exe_path.exists():
                 executable = exe_path
 
@@ -135,16 +143,17 @@ class KnapsackSimulator:
         input_data += " ".join(map(str, weights)) + "\n"
         input_data += " ".join(map(str, values)) + "\n"
 
-        try:
-            # Determine an adaptive timeout based on problem size n.
-            # Heuristic: base + (per_item * n), capped to a reasonable maximum.
-            per_item = 0.5  # seconds per item (heuristic)
-            timeout_seconds = min(
-                120.0, max(2.0, self.base_timeout_seconds + per_item * float(n))
-            )
-            if custom_timeout is not None:
-                timeout_seconds = custom_timeout
+        # Determine an adaptive timeout based on problem size n.
+        # Heuristic: base + (per_item * n), capped to a reasonable maximum.
+        per_item = 0.5  # seconds per item (heuristic)
+        timeout_seconds = min(
+            120.0, max(2.0, self.base_timeout_seconds + per_item * float(n))
+        )
+        # Custom: override if provided
+        if custom_timeout is not None:
+            timeout_seconds = custom_timeout
 
+        try:
             # Build the command. On Windows, prefer running via WSL when executable is a *nix binary.
             if platform.system() == "Windows" and shutil.which("wsl"):
                 # Try to convert Windows path to a WSL-compatible path.
@@ -240,97 +249,84 @@ class KnapsackSimulator:
     def simulate_all(self, dataset_name, category, custom_timeout=None):
         """Run all algorithms on the dataset"""
         logger.info(f"Loading {category} dataset from {dataset_name}...")
-        df, total_csv_rows = self.load_dataset(dataset_name, category)
+        df, _ = self.load_dataset(dataset_name, category)
         if df is None:
             return None
 
-        # Sort instances by n
-        df.sort_values(by="n", inplace=True)
-        logger.info(f"Found {len(df)} test cases, sorted by problem size 'n'.")
+        logger.info(f"Found {len(df)} test cases.")
 
-        results = []
-        consecutive_failures = {algo: 0 for algo in self.algorithms.keys()}
-        excluded_algos = set()
-
-        for counter, (idx, row) in enumerate(df.iterrows(), 1):
-            n = row["n"]
-            capacity = row["capacity"]
-            weights = row["weights"]
-            values = row["prices"]
-            best_price = row["best_price"]
-            seed = row["seed"]
-
-            logger.info(
-                f"Test case {idx + 1}/{total_csv_rows} ({counter}/{len(df)}): n={n}, capacity={capacity}"
+        # Start with the original dataframe and add result columns
+        results_df = df.copy()
+        for algo_name in self.algorithms:
+            results_df[f"{algo_name}_value"] = pd.NA
+            results_df[f"{algo_name}_time"] = pd.NA
+            results_df[f"{algo_name}_memory"] = pd.NA
+            results_df[f"{algo_name}_items"] = pd.Series(
+                [None] * len(results_df), index=results_df.index, dtype=object
             )
+            results_df[f"{algo_name}_accuracy"] = pd.NA
+            results_df[f"{algo_name}_optimal"] = False
 
-            test_result = {
-                "test_id": idx,
-                "n": n,
-                "capacity": capacity,
-                "optimal_value": best_price,
-                "seed": seed,
-            }
+        # Pre-calculate the run order for each algorithm
+        run_orders = self._prepare_run_order(df)
 
-            for algo_name in self.algorithms.keys():
-                if algo_name in excluded_algos:
-                    logger.info(
-                        f"  Skipping {self.algorithms[algo_name]['name']} (excluded after 3 consecutive failures)."
+        # Run each algorithm independently
+        for algo_name, sorted_indices in run_orders.items():
+            algo_display_name = self.algorithms[algo_name]["name"]
+            logger.info(f"\n{'=' * 60}\nRunning {algo_display_name}\n{'=' * 60}")
+
+            consecutive_failures = 0
+            for test_count, idx in enumerate(sorted_indices, 1):
+                if consecutive_failures >= 3:
+                    logger.critical(
+                        f"*** Algorithm {algo_display_name} discontinued after 3 consecutive failures. ***"
                     )
-                    # Still need to add null results for this algo
-                    test_result[f"{algo_name}_value"] = None
-                    test_result[f"{algo_name}_time"] = None
-                    test_result[f"{algo_name}_memory"] = None
-                    test_result[f"{algo_name}_items"] = None
-                    test_result[f"{algo_name}_accuracy"] = None
-                    test_result[f"{algo_name}_optimal"] = False
-                    continue
+                    logger.info(
+                        f"Skipping remaining {len(sorted_indices) - test_count + 1} test cases."
+                    )
+                    break
 
-                logger.info(f"  Running {self.algorithms[algo_name]['name']}...")
+                row = df.loc[idx]
+                logger.info(
+                    f"Test {test_count}/{len(sorted_indices)}: test_id={idx}, n={row['n']}, capacity={row['capacity']}"
+                )
 
                 result = self.run_algorithm(
-                    algo_name, n, capacity, weights, values, custom_timeout
+                    algo_name,
+                    row["n"],
+                    row["capacity"],
+                    row["weights"],
+                    row["prices"],
+                    custom_timeout,
                 )
 
                 if result:
-                    consecutive_failures[algo_name] = 0  # Reset on success
-                    test_result[f"{algo_name}_value"] = result["max_value"]
-                    test_result[f"{algo_name}_time"] = result["execution_time"]
-                    test_result[f"{algo_name}_memory"] = result["memory_used"]
-                    test_result[f"{algo_name}_items"] = result["selected_items"]
-                    test_result[f"{algo_name}_accuracy"] = (
+                    consecutive_failures = 0
+                    accuracy = (
                         100.0
-                        if result["max_value"] == best_price
-                        else (result["max_value"] / best_price * 100.0)
+                        if row["best_price"] == 0 and result["max_value"] == 0
+                        else (result["max_value"] / row["best_price"] * 100.0)
+                        if row["best_price"] > 0
+                        else 0.0
                     )
-                    test_result[f"{algo_name}_optimal"] = (
-                        result["max_value"] == best_price
-                    )
+                    is_optimal = result["max_value"] == row["best_price"]
+
+                    results_df.at[idx, f"{algo_name}_value"] = result["max_value"]
+                    results_df.at[idx, f"{algo_name}_time"] = result["execution_time"]
+                    results_df.at[idx, f"{algo_name}_memory"] = result["memory_used"]
+                    results_df.at[idx, f"{algo_name}_items"] = result["selected_items"]
+                    results_df.at[idx, f"{algo_name}_accuracy"] = accuracy
+                    results_df.at[idx, f"{algo_name}_optimal"] = is_optimal
+
                     logger.info(
-                        f"  -> Value: {result['max_value']}, Time: {result['execution_time']}μs"
+                        f"  -> Value: {result['max_value']}, Time: {result['execution_time']}μs, Optimal: {is_optimal}"
                     )
                 else:
-                    consecutive_failures[algo_name] += 1
+                    consecutive_failures += 1
                     logger.warning(
-                        f"  -> FAILED ({consecutive_failures[algo_name]} consecutive)"
+                        f"  -> FAILED (consecutive failures: {consecutive_failures})"
                     )
-                    if consecutive_failures[algo_name] >= 3:
-                        excluded_algos.add(algo_name)
-                        logger.critical(
-                            f"*** Algorithm {self.algorithms[algo_name]['name']} failed 3 times, excluding from further tests in this run. ***"
-                        )
-
-                    test_result[f"{algo_name}_value"] = None
-                    test_result[f"{algo_name}_time"] = None
-                    test_result[f"{algo_name}_memory"] = None
-                    test_result[f"{algo_name}_items"] = None
-                    test_result[f"{algo_name}_accuracy"] = None
-                    test_result[f"{algo_name}_optimal"] = False
-
-            results.append(test_result)
-
-        # Convert to DataFrame
-        results_df = pd.DataFrame(results)
+                    # Values are already NA/False, so no need to set them again
 
         # Save results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -340,10 +336,10 @@ class KnapsackSimulator:
 
         return results_df
 
-    def create_visualizations(self, results_df, category="Tiny"):
-        """Create comprehensive visualizations"""
+    def create_visualisations(self, results_df, category="Tiny"):
+        """Create comprehensive visualisations"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        viz_dir = self.visualization_path / f"{category}_{timestamp}"
+        viz_dir = self.visualisation_path / f"{category}_{timestamp}"
         viz_dir.mkdir(exist_ok=True)
 
         algo_list = list(self.algorithms.keys())
@@ -368,7 +364,7 @@ class KnapsackSimulator:
         # 6. Optimality Rate
         self._plot_optimality_rate(results_df, algo_list, viz_dir)
 
-        logger.info(f"Visualizations saved to {viz_dir}")
+        logger.info(f"Visualisations saved to {viz_dir}")
 
     def _plot_time_vs_size(self, df, algorithms, viz_dir):
         """Plot execution time vs problem size"""
@@ -447,7 +443,7 @@ class KnapsackSimulator:
                     algo_names.append(self.algorithms[algo]["name"])
 
         if accuracies:
-            plt.boxplot(accuracies, labels=algo_names, patch_artist=True)
+            plt.boxplot(accuracies, tick_labels=algo_names, patch_artist=True)
             plt.ylabel("Accuracy (%)", fontsize=12, fontweight="bold")
             plt.title("Solution Quality Distribution", fontsize=14, fontweight="bold")
             plt.grid(True, alpha=0.3, axis="y")
@@ -499,8 +495,12 @@ class KnapsackSimulator:
             acc_col = f"{algo}_accuracy"
 
             if time_col in df.columns and acc_col in df.columns:
-                times_ms = df[time_col] / 1000.0
-                accuracies = df[acc_col]
+                df_valid = df[[time_col, acc_col]].dropna()
+                if df_valid.empty:
+                    continue
+
+                times_ms = df_valid[time_col] / 1000.0
+                accuracies = df_valid[acc_col]
 
                 plt.scatter(
                     times_ms,
@@ -534,7 +534,12 @@ class KnapsackSimulator:
         for algo in algorithms:
             opt_col = f"{algo}_optimal"
             if opt_col in df.columns:
-                rate = df[opt_col].sum() / len(df) * 100
+                # Ensure there are non-NA values to avoid errors on empty dataframes
+                valid_entries = df[opt_col].dropna()
+                if not valid_entries.empty:
+                    rate = valid_entries.sum() / len(valid_entries) * 100
+                else:
+                    rate = 0.0
                 algo_names.append(self.algorithms[algo]["name"])
                 optimality_rates.append(rate)
 
@@ -630,8 +635,8 @@ class KnapsackSimulator:
         ax.axis("off")
 
         table = ax.table(
-            cellText=summary_df.values,
-            colLabels=summary_df.columns,
+            cellText=summary_df.values.tolist(),
+            colLabels=summary_df.columns.tolist(),
             cellLoc="center",
             loc="center",
             colWidths=[0.15] * len(summary_df.columns),
@@ -646,7 +651,7 @@ class KnapsackSimulator:
             table[(0, i)].set_facecolor("#40466e")
             table[(0, i)].set_text_props(weight="bold", color="white")
 
-        # Alternate row colors
+        # Alternate row colours
         for i in range(1, len(summary_data) + 1):
             for j in range(len(summary_df.columns)):
                 if i % 2 == 0:
@@ -661,6 +666,24 @@ class KnapsackSimulator:
 
         logger.info("Summary Statistics:")
         logger.info(summary_df.to_string(index=False))
+
+    def _prepare_run_order(self, df):
+        """Pre-calculates the run order for all algorithms."""
+        run_orders = {}
+        for algo_name, config in self.algorithms.items():
+            complexity_col = f"{algo_name}_complexity"
+
+            df[complexity_col] = df.apply(
+                lambda row: config["sort_key"](row["n"], row["capacity"]), axis=1
+            )
+
+            # Store sorted indices
+            run_orders[algo_name] = df.sort_values(
+                by=complexity_col, ascending=True
+            ).index.tolist()
+            # Drop the complexity column to keep the DataFrame clean
+            df.drop(columns=[complexity_col], inplace=True)
+        return run_orders
 
 
 def main():
@@ -687,11 +710,11 @@ def main():
     # --- Define the simulation runs here ---
     # Format: [dataset_name, category, optional_timeout_in_seconds]
     simulation_runs = [
-        ["knapsack_test_tiny.csv", "Tiny"],
+        ["knapsack_dataset.csv", "Tiny"],
         # ["knapsack_dataset_l012_400.csv", "Tiny", 4],
         # ["knapsack_dataset_l012_400.csv", "Small", 8],
         # ["knapsack_dataset_l012_400.csv", "Medium", 15],
-        # ["knapsack_dataset_l3_20.csv", "Large", 600],
+        # ["knapsack_dataset_l3_20.csv", "Large", 450],
     ]
 
     # Create simulator
@@ -711,9 +734,9 @@ def main():
             dataset_name=dataset_name, category=category, custom_timeout=timeout
         )
 
-        # Create visualizations
-        logger.info("Generating visualizations...")
-        simulator.create_visualizations(results_df, category=category)
+        # Create visualisations
+        logger.info("Generating visualisations...")
+        simulator.create_visualisations(results_df, category=category)
 
     logger.info("=" * 60)
     logger.info("All simulations completed successfully!")

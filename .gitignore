@@ -1,9 +1,10 @@
 # ignore datasets
 /data/*.csv
-# ignore results and visualisations
+# ignore simulation data and archives
+/simulation/archive/
 /simulation/logs/
 /simulation/results/
-/simulation/visualizations/
+/simulation/visualisations/
 # ignore environment files
 **/.vscode/
 **/.venv/

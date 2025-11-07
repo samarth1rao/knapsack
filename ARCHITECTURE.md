@@ -2,7 +2,7 @@
 
 ## System Overview
 
-```
+```txt
 ┌─────────────────────────────────────────────────────────────────┐
 │                    KNAPSACK ANALYSIS SYSTEM                      │
 └─────────────────────────────────────────────────────────────────┘
@@ -16,15 +16,15 @@
 │ Test Datasets   │───────>│ C++ Algorithms   │───────>│ Python Simulator │
 │                 │        │                  │        │                  │
 │ - Tiny (20-40)  │        │ ✓ Brute Force    │        │ - Run Tests      │
-│ - Small (100+)  │        │ ○ Memoization    │        │ - Collect Data   │
-│ - Medium (10K+) │        │ ✓ Dynamic Prog   │        │ - Analyze        │
-│ - Large (1M+)   │        │ ○ Branch & Bound │        │ - Visualize      │
-│                 │        │ ○ Meet Middle    │        │                  │
-│ knapsack_       │        │ ○ Greedy         │        │ simulate.py      │
-│ dataset.csv     │        │ ○ Random Perm    │        │                  │
+│ - Small (100+)  │        │ ✓ Memoization    │        │ - Collect Data   │
+│ - Medium (10K+) │        │ ✓ Dynamic Prog   │        │ - Analyse        │
+│ - Large (1M+)   │        │ ○ Branch & Bound │        │ - Visualise      │
+│                 │        │ ✓ Meet in Middle │        │                  │
+│ knapsack_       │        │ ✓ Greedy         │        │ simulate.py      │
+│ dataset.csv     │        │ ✓ Random Perm    │        │                  │
 └─────────────────┘        │ ○ Efficient      │        └──────────────────┘
-                           │ ○ Billion Scale  │                │
-                           │ ○ Genetic Algo   │                │
+                           │ ✓ Billion Scale  │                │
+                           │ ✓ Genetic Algo   │                │
                            │                  │                ▼
                            │ bin/bruteforce   │        ┌──────────────────┐
                            └──────────────────┘        │  OUTPUT LAYER    │
@@ -44,7 +44,7 @@
 
 ## Data Flow Diagram
 
-```
+```txt
 ┌──────────────┐
 │   CSV Data   │
 │  (Datasets)  │
@@ -93,7 +93,7 @@
        │ After all tests
        ▼
 ┌──────────────────┐
-│  Visualization   │
+│  Visualisation   │
 │                  │
 │ - matplotlib     │
 │ - seaborn        │
@@ -113,26 +113,26 @@
 
 ## Technology Stack
 
-```
+```txt
 ┌─────────────────────────────────────────────┐
-│              TECHNOLOGY STACK                │
+│              TECHNOLOGY STACK               │
 └─────────────────────────────────────────────┘
 
 Programming Languages:
   • C++ (Algorithms)        - Performance-critical code
-  • Python (Simulation)     - Analysis & visualization
+  • Python (Simulation)     - Analysis & visualisation
   • Shell (Build)           - Automation
 
 C++ Components:
   • Standard Library        - vectors, chrono, iostream
   • C++17 Features          - Modern syntax
-  • G++ Compiler            - Optimization flags
+  • G++ Compiler            - Optimisation flags
 
 Python Libraries:
   • pandas                  - Data manipulation
   • numpy                   - Numerical operations
   • matplotlib              - Base plotting
-  • seaborn                 - Statistical visualization
+  • seaborn                 - Statistical visualisation
   • subprocess              - Algorithm execution
 
 Build Tools:
@@ -147,7 +147,8 @@ Operating System:
 ## Workflow
 
 ### Development Workflow
-```
+
+```txt
 1. Implement Algorithm (C++)
    └─> algorithms/XX-name/algorithm.cpp
 
@@ -161,13 +162,14 @@ Operating System:
    └─> make all
    └─> python simulate.py
 
-5. Analyze
-   └─> View visualizations
+5. Analyse
+   └─> View visualisations
    └─> Compare with other algorithms
 ```
 
 ### Execution Workflow
-```
+
+```txt
 User Run: python simulate.py
     │
     ├─> Load CSV Data
@@ -194,7 +196,7 @@ User Run: python simulate.py
     ├─> Save Results
     │   └─> CSV file with timestamp
     │
-    └─> Generate Visualizations
+    └─> Generate Visualisations
         ├─> Time analysis
    ├─> Time vs Capacity analysis
         ├─> Quality analysis
@@ -208,7 +210,8 @@ User Run: python simulate.py
 ### Adding New Algorithms
 
 1. **Create Source File**
-   ```
+
+   ```sh
    algorithms/XX-name/algorithm.cpp
    ```
 
@@ -217,6 +220,7 @@ User Run: python simulate.py
    - Output: max_value, items, time, memory
 
 3. **Update Makefile**
+
    ```makefile
    name: $(TARGET_DIR)/name
    $(TARGET_DIR)/name: XX-name/algorithm.cpp
@@ -224,25 +228,29 @@ User Run: python simulate.py
    ```
 
 4. **Register in Simulator**
+
    ```python
    self.algorithms = {
-       'name': {
-           'executable': path,
-           'name': 'Display Name'
-       }
+      "name": {
+         "executable": <path>,
+         "name": "<display name>",
+         "sort_key": lambda n, w: <simplified big-O>, # <big-O formula>,
+      }
    }
    ```
 
-### Adding New Visualizations
+### Adding New Visualisations
 
 1. **Create Method in KnapsackSimulator**
+
    ```python
    def _plot_new_viz(self, df, algorithms, viz_dir):
-       # Create plot
-       plt.savefig(viz_dir / 'new_viz.png')
+      # Create plot
+      plt.savefig(viz_dir / "new_viz.png")
    ```
 
-2. **Call in create_visualizations()**
+2. **Call in create_visualisations()**
+
    ```python
    self._plot_new_viz(results_df, algo_list, viz_dir)
    ```
@@ -258,25 +266,28 @@ User Run: python simulate.py
 3. **Store in Results**
    - Add column to DataFrame
 
-4. **Visualize**
+4. **Visualise**
    - Create appropriate plot
 
 ## Performance Considerations
 
 ### C++ Side
-- Use `-O2` optimization
-- Minimize memory allocations
+
+- Use `-O2` optimisation
+- Minimise memory allocations
 - Efficient recursion/iteration
 - Measure time accurately (chrono)
 
 ### Python Side
+
 - Batch operations with pandas
-- Use vectorized numpy operations
+- Use vectorised numpy operations
 - Generate plots once after all tests
 - Save results incrementally
 
 ### WSL Bridge
-- Minimize subprocess calls
+
+- Minimise subprocess calls
 - Batch input/output
 - Handle timeouts gracefully
 - Convert paths efficiently
