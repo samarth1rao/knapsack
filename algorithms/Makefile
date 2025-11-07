@@ -11,7 +11,14 @@ ALGO_DIRS = 01-bruteforce 02-memoization 03-dynamicprogramming 04-branchandbound
             09-billionscale 10-geneticalgorithm
 
 # Explicit targets we currently build
-TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming $(TARGET_DIR)/randompermutation $(TARGET_DIR)/geneticalgorithm $(TARGET_DIR)/meetinthemiddle $(TARGET_DIR)/greedyheuristic
+TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming $(TARGET_DIR)/randompermutation $(TARGET_DIR)/geneticalgorithm $(TARGET_DIR)/meetinthemiddle $(TARGET_DIR)/greedyheuristic $(TARGET_DIR)/billionscale
+.PHONY: billionscale
+billionscale: $(TARGET_DIR)/billionscale
+
+$(TARGET_DIR)/billionscale: 09-billionscale/algo.cpp
+	@echo "Compiling Billionscale algorithm..."
+	$(CXX) $(CXXFLAGS) -o $@ $<
+	@echo "Billionscale compiled successfully!"
 
 # Create bin directory if it doesn't exist
 $(shell mkdir -p $(TARGET_DIR))

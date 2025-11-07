@@ -77,6 +77,10 @@ class KnapsackSimulator:
                 "executable": self.algorithms_path / "bin" / "geneticalgorithm",
                 "name": "Genetic Algorithm",
             },
+            "billionscale": {
+                "executable": self.algorithms_path / "bin" / "billionscale",
+                "name": "Billionscale",
+            },
             # Add more algorithms as they are implemented
         }
         # Base timeout (seconds) used as part of adaptive timeout calculation
