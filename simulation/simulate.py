@@ -64,6 +64,11 @@ class KnapsackSimulator:
                 "name": "Dynamic Programming",
                 "sort_key": lambda n, w: n * w,
             },
+            "branchandbound": {
+                "executable": self.algorithms_path / "bin" / "branchandbound",
+                "name": "Branch and Bound",
+                "sort_key": lambda n, w: 2 ** n,  # Worst case exponential, but often much better
+            },
             "meetinthemiddle": {
                 "executable": self.algorithms_path / "bin" / "meetinthemiddle",
                 "name": "Meet in the Middle",

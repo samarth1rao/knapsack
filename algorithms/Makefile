@@ -11,7 +11,7 @@ ALGO_DIRS = 01-bruteforce 02-memoization 03-dynamicprogramming 04-branchandbound
             09-billionscale 10-geneticalgorithm
 
 # Explicit targets we currently build
-TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming $(TARGET_DIR)/randompermutation $(TARGET_DIR)/geneticalgorithm $(TARGET_DIR)/meetinthemiddle $(TARGET_DIR)/greedyheuristic $(TARGET_DIR)/billionscale
+TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming $(TARGET_DIR)/branchandbound $(TARGET_DIR)/randompermutation $(TARGET_DIR)/geneticalgorithm $(TARGET_DIR)/meetinthemiddle $(TARGET_DIR)/greedyheuristic $(TARGET_DIR)/billionscale
 .PHONY: billionscale
 billionscale: $(TARGET_DIR)/billionscale
 
@@ -23,7 +23,7 @@ $(TARGET_DIR)/billionscale: 09-billionscale/algo.cpp
 # Create bin directory if it doesn't exist
 $(shell mkdir -p $(TARGET_DIR))
 
-.PHONY: all clean bruteforce memoization dynamicprogramming randompermutation geneticalgorithm meetinthemiddle help
+.PHONY: all clean bruteforce memoization dynamicprogramming branchandbound randompermutation geneticalgorithm meetinthemiddle help
 # Convenience single-target alias
 meetinthemiddle: $(TARGET_DIR)/meetinthemiddle
 
@@ -39,6 +39,7 @@ all: $(TARGETS)
 bruteforce: $(TARGET_DIR)/bruteforce
 memoization: $(TARGET_DIR)/memoization
 dynamicprogramming: $(TARGET_DIR)/dynamicprogramming
+branchandbound: $(TARGET_DIR)/branchandbound
 randompermutation: $(TARGET_DIR)/randompermutation
 geneticalgorithm: $(TARGET_DIR)/geneticalgorithm
 greedyheuristic: $(TARGET_DIR)/greedyheuristic
@@ -57,6 +58,11 @@ $(TARGET_DIR)/dynamicprogramming: 03-dynamicprogramming/dynamicprogramming.cpp
 	@echo "Compiling Dynamic Programming algorithm..."
 	$(CXX) $(CXXFLAGS) -o $@ $<
 	@echo "Dynamic Programming compiled successfully!"
+
+$(TARGET_DIR)/branchandbound: 04-branchandbound/branchandbound.cpp
+	@echo "Compiling Branch and Bound algorithm..."
+	$(CXX) $(CXXFLAGS) -o $@ $<
+	@echo "Branch and Bound compiled successfully!"
 
 $(TARGET_DIR)/randompermutation: 07-randompremutation/randompermutation.cpp
 	@echo "Compiling Random Permutation algorithm..."
@@ -88,8 +94,8 @@ clean:
 help:
 	@echo "Knapsack Algorithms Makefile"
 	@echo "Usage:"
-	@echo "  make all                    - Compile all explicit algorithms (bruteforce, memoization, dynamicprogramming, randompermutation, geneticalgorithm, greedyheuristic)"
-	@echo "  make <name>                 - Compile a single algorithm, e.g. 'make bruteforce', 'make memoization', 'make dynamicprogramming', 'make randompermutation', 'make geneticalgorithm', or 'make greedyheuristic'"
+	@echo "  make all                    - Compile all explicit algorithms (bruteforce, memoization, dynamicprogramming, branchandbound, randompermutation, geneticalgorithm, greedyheuristic)"
+	@echo "  make <name>                 - Compile a single algorithm, e.g. 'make bruteforce', 'make memoization', 'make dynamicprogramming', 'make branchandbound', 'make randompermutation', 'make geneticalgorithm', or 'make greedyheuristic'"
 	@echo "  make clean                  - Remove all compiled binaries"
 	@echo "  make help                   - Display this help message"
 	@echo "Notes: Add a new algorithm by placing its source in a numbered subdirectory (e.g. 11-newalgo/newalgo.cpp) and either add an explicit rule to this Makefile or rely on the generic pattern rule. The produced executable should be placed in $(TARGET_DIR) and named after the folder (or your chosen key)."

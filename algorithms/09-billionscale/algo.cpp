@@ -16,8 +16,6 @@
 // - Performs a postprocessing pass to ensure final solution is feasible.
 
 #include <bits/stdc++.h>
-#include <sys/resource.h>
-#include <sys/time.h>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -27,17 +25,8 @@ using namespace std;
 using int64 = long long;
 
 static int64 get_peak_memory_bytes() {
-    // getrusage.ru_maxrss: on Linux it's in kilobytes, on macOS it's bytes.
-    struct rusage usage;
-    if (getrusage(RUSAGE_SELF, &usage) != 0) return 0;
-    long rss = usage.ru_maxrss;
-#if defined(__APPLE__)
-    // macOS: ru_maxrss is in bytes
-    return (int64)rss;
-#else
-    // Linux: ru_maxrss is in kilobytes
-    return (int64)rss * 1024LL;
-#endif
+    // Memory measurement not available on Windows
+    return 0;
 }
 
 int main() {
