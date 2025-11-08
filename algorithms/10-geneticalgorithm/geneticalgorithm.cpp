@@ -35,45 +35,54 @@ int KNAPSACK_CAPACITY;                  // Maximum weight the knapsack can hold.
 std::vector<int> ITEM_WEIGHTS;          // Weights of the items.
 std::vector<int> ITEM_VALUES;           // Values of the items.
 int NUM_ITEMS;                          // Total number of items.
-std::vector<ItemProperty> SORTED_ITEMS; // Pre-sorted list of items by value-to-weight ratio.
 
-// Mersenne Twister random number generator, will be seeded in main.
-std::mt19937 rng;
+// Global random number generator and helper vector.
+std::mt19937 rng;                   // Mersenne Twister random number generator, seeded in main.
+std::vector<int> included_indices;  // Helper vector for repair function.
 
 
 // Class to represent an individual in the population.
 // Each individual is a potential solution, represented by a bit string.
 class Individual {
 public:
-    std::vector<char> bits;             // A bit string (0 or 1) representing item selection.
+    std::vector<bool> bits;             // A bit string representing item selection.
+    int totalValue = 0;                 // Cached total value of selected items.
+    int totalWeight = 0;                // Cached total weight of selected items.
     mutable int cachedFitness = -1;     // Cached fitness value to avoid re-computation.
     mutable bool fitnessValid = false;  // Flag to check if the cached fitness is valid.
 
-    // Constructor to create an individual with a given number of items, initialised to 0.
-    Individual(int n) : bits(n, 0) {}
+    // Constructor to create an individual with a given number of items, initialised to false.
+    Individual(int n) : bits(n, false) {}
 
     // Constructor to create an individual from an existing bit string.
-    Individual(const std::vector<char> &b) : bits(b) {}
+    Individual(const std::vector<bool> &b) : bits(b) {
+        // Compute total value and weight upon creation.
+        calculateMetrics();
+    }
+
+    // Calculates total value and weight from scratch. To be called after major changes.
+    void calculateMetrics() {
+        totalValue = 0;
+        totalWeight = 0;
+        for (int i = 0; i < NUM_ITEMS; ++i) {
+            if (bits[i]) {
+                totalValue += ITEM_VALUES[i];
+                totalWeight += ITEM_WEIGHTS[i];
+            }
+        }
+        // Invalidate fitness cache as metrics have been recalculated.
+        fitnessValid = false;
+    }
 
     // Calculates the fitness of the individual.
     // Fitness is the total value of selected items or 0 if over capacity.
-    int fitness() const {
+    int getFitness() const {
         // Return cached fitness if it's valid.
         if (fitnessValid) {
             return cachedFitness;
         }
 
-        // Calculate total value and weight of selected items.
-        int totalValue = 0;
-        int totalWeight = 0;
-        for (int i = 0; i < NUM_ITEMS; ++i) {
-            if (bits[i] == 1) {
-                totalValue += ITEM_VALUES[i];
-                totalWeight += ITEM_WEIGHTS[i];
-            }
-        }
-
-        // If total weight exceeds capacity, the solution is invalid, so fitness is 0.
+        // Use pre-computed metrics to determine fitness.
         if (totalWeight > KNAPSACK_CAPACITY) {
             cachedFitness = 0;
         }
@@ -81,71 +90,49 @@ public:
             cachedFitness = totalValue;
         }
 
-        // Cache the new fitness value.
+        // Cache the fitness value.
         fitnessValid = true;
         return cachedFitness;
     }
 
-    // Calculates the total weight of the items selected by the individual.
-    int totalWeight() const {
-        int weight = 0;
-        for (int i = 0; i < NUM_ITEMS; ++i) {
-            if (bits[i] == 1) {
-                weight += ITEM_WEIGHTS[i];
-            }
-        }
-        return weight;
+    // Returns the total weight of the items selected by the individual.
+    int getWeight() const {
+        return totalWeight;
     }
 };
 
 
-// Pre-sorts items by their value-to-weight ratio in ascending order.
-void preSortItems() {
-    // Resize SORTED_ITEMS.
-    SORTED_ITEMS.resize(NUM_ITEMS);
+// Repairs an individual that is overweight (total weight > knapsack capacity).
+// It randomly removes items until the individual is valid.
+void repairIndividual(Individual &individual) {
+    // Calculate the current weight of the individual.
+    if (individual.totalWeight <= KNAPSACK_CAPACITY) {
+        return;
+    }
 
-    // Compute value-to-weight ratio for each item. Handle zero weight case.
+    // Collect indices of items that are currently included in the knapsack.
+    int included_count = 0;
     for (int i = 0; i < NUM_ITEMS; ++i) {
-        SORTED_ITEMS[i].id = i;
-        if (ITEM_WEIGHTS[i] > 0) {
-            SORTED_ITEMS[i].ratio = static_cast<double>(ITEM_VALUES[i]) / ITEM_WEIGHTS[i];
-        }
-        else if (ITEM_VALUES[i] > 0) {
-            SORTED_ITEMS[i].ratio = std::numeric_limits<double>::infinity();
-        }
-        else {
-            SORTED_ITEMS[i].ratio = 0.0;
+        if (individual.bits[i] == 1) {
+            included_indices[included_count++] = i;
         }
     }
 
-    // Sort items by their value-to-weight ratio in ascending order.
-    std::sort(
-        SORTED_ITEMS.begin(),
-        SORTED_ITEMS.end(),
-        [](const ItemProperty &a, const ItemProperty &b) {
-            return a.ratio < b.ratio;
-        }
-    );
-}
+    // Randomly remove items until the individual is within capacity.
+    while (individual.totalWeight > KNAPSACK_CAPACITY) {
+        // Distribution for generating random indices.
+        std::uniform_int_distribution<int> dist(0, included_count - 1);
+        // Select a random item to remove.
+        int random_vector_index = dist(rng);
+        int item_index = included_indices[random_vector_index];
 
+        // Remove the item from the individual.
+        included_indices[random_vector_index] = included_indices[--included_count];
 
-// Repairs an individual that is overweight (total weight > knapsack capacity).
-// It removes items with the lowest value-to-weight ratio until the individual is valid.
-void repairIndividual(Individual &individual) {
-    // Calculate the current weight of the individual.
-    int currentWeight = individual.totalWeight();
-
-    // Remove the worst items till the weight is within capacity.
-    for (const auto &itemProp : SORTED_ITEMS) {
-        // If the individual is within capacity, stop repair.
-        if (currentWeight <= KNAPSACK_CAPACITY) {
-            break;
-        }
-        // Remove the item if it is included in the individual.
-        if (individual.bits[itemProp.id] == 1) {
-            individual.bits[itemProp.id] = 0;           // Remove item by setting its bit to 0.
-            currentWeight -= ITEM_WEIGHTS[itemProp.id]; // Update the current weight.
-        }
+        // Update individual's bit string and metrics.
+        individual.bits[item_index] = 0;
+        individual.totalWeight -= ITEM_WEIGHTS[item_index];
+        individual.totalValue -= ITEM_VALUES[item_index];
     }
 
     // Invalidate the fitness cache as the individual has been modified.
@@ -165,8 +152,10 @@ std::vector<Individual> generateInitialPopulation() {
     for (int p = 0; p < POPULATION_SIZE; ++p) {
         Individual ind(NUM_ITEMS);
         for (int i = 0; i < NUM_ITEMS; ++i) {
-            ind.bits[i] = bitDist(rng);
+            ind.bits[i] = (bitDist(rng) == 1);
         }
+        // Calculate metrics once from scratch.
+        ind.calculateMetrics();
         population.push_back(ind);
     }
 
@@ -204,14 +193,14 @@ std::pair<const Individual *, const Individual *> selection(const std::vector<In
     // Tournament 1: Select the fitter individual between the first two.
     const Individual *parent1 = &population[idx1];
     const Individual *parent2 = &population[idx2];
-    if (parent2->fitness() > parent1->fitness()) {
+    if (parent2->getFitness() > parent1->getFitness()) {
         parent1 = parent2;
     }
 
     // Tournament 2: Select the fitter individual between the last two.
     const Individual *parent3 = &population[idx3];
     const Individual *parent4 = &population[idx4];
-    if (parent4->fitness() > parent3->fitness()) {
+    if (parent4->getFitness() > parent3->getFitness()) {
         parent3 = parent4;
     }
 
@@ -234,9 +223,9 @@ void crossover(const Individual &parent1, const Individual &parent2,
     std::copy(parent2.bits.begin(), parent2.bits.begin() + midpoint, child2.bits.begin());
     std::copy(parent1.bits.begin() + midpoint, parent1.bits.end(), child2.bits.begin() + midpoint);
 
-    // Invalidate fitness caches for the children.
-    child1.fitnessValid = false;
-    child2.fitnessValid = false;
+    // Recalculate metrics from scratch for the children.
+    child1.calculateMetrics();
+    child2.calculateMetrics();
 }
 
 
@@ -246,12 +235,24 @@ void mutate(Individual &individual) {
     // Distribution for mutation probability.
     std::uniform_real_distribution<double> probDist(0.0, 1.0);
 
-    // Apply mutation to each bit.
+    // Mutation flag.
     bool mutated = false;
+    // Apply mutation to each bit.
     for (int i = 0; i < NUM_ITEMS; ++i) {
-        // Flip the bit with probability MUTATION_RATE.
+        // Flip the bit with probability MUTATION_RATE and update metrics accordingly.
         if (probDist(rng) < MUTATION_RATE) {
-            individual.bits[i] = 1 - individual.bits[i];
+            // Flipping true-> false, removing item.
+            if (individual.bits[i]) {
+                individual.totalValue -= ITEM_VALUES[i];
+                individual.totalWeight -= ITEM_WEIGHTS[i];
+            }
+            // Flipping false-> true, adding item.
+            else {
+                individual.totalValue += ITEM_VALUES[i];
+                individual.totalWeight += ITEM_WEIGHTS[i];
+            }
+            // Flip the bit and set mutated flag.
+            individual.bits[i].flip();
             mutated = true;
         }
     }
@@ -264,18 +265,11 @@ void mutate(Individual &individual) {
 
 
 // Generates the next generation of the population and swaps it with the current population.
-// Uses elitism, selection followed by reproduction or crossover, and mutation.
+// Uses selection followed by reproduction or crossover, and mutation.
 void nextGeneration(const std::vector<Individual> &currentPop, std::vector<Individual> &nextPop) {
     std::uniform_real_distribution<double> probDist(0.0, 1.0);
 
-    // Elitism: The best individual from the current population is carried over to the next generation.
-    auto bestIt = max_element(
-        currentPop.begin(),
-        currentPop.end(),
-        [](const Individual &a, const Individual &b) { return a.fitness() < b.fitness(); });
-    nextPop[0] = *bestIt;
-
-    // Fill the rest of the next population.
+    // Fill the next population.
     for (size_t i = 1; i < static_cast<size_t>(POPULATION_SIZE); ) {
         // Select two parents using tournament selection.
         auto [parent1, parent2] = selection(currentPop);
@@ -330,9 +324,6 @@ Result solveKnapsackGenetic() {
     // Start the timer.
     auto start = std::chrono::high_resolution_clock::now();
 
-    // Pre-sort items by value-to-weight ratio.
-    preSortItems();
-
     // Create the initial population.
     std::vector<Individual> population = generateInitialPopulation();
     std::vector<Individual> nextPopulation(POPULATION_SIZE, Individual(NUM_ITEMS));
@@ -347,17 +338,17 @@ Result solveKnapsackGenetic() {
     Individual bestIndividual = *max_element(
         population.begin(),
         population.end(),
-        [](const Individual &a, const Individual &b) { return a.fitness() < b.fitness(); });
+        [](const Individual &a, const Individual &b) { return a.getFitness() < b.getFitness(); });
 
     // Stop the timer.
     auto end = std::chrono::high_resolution_clock::now();
 
     // Store the results.
-    result.maxValue = bestIndividual.fitness();
+    result.maxValue = bestIndividual.getFitness();
 
     // Collect the indices of the selected items.
     for (int i = 0; i < NUM_ITEMS; ++i) {
-        if (bestIndividual.bits[i] == 1) {
+        if (bestIndividual.bits[i]) {
             result.selectedItems.push_back(i);
         }
     }
@@ -368,15 +359,14 @@ Result solveKnapsackGenetic() {
     // Approximate memory usage.
     size_t populationMemory = 0;
     for (const auto &ind : population) {
-        populationMemory += sizeof(Individual) + (ind.bits.capacity() * sizeof(char));
+        populationMemory += sizeof(Individual) + ((ind.bits.capacity() + 7) / 8);
     }
     for (const auto &ind : nextPopulation) {
-        populationMemory += sizeof(Individual) + (ind.bits.capacity() * sizeof(char));
+        populationMemory += sizeof(Individual) + ((ind.bits.capacity() + 7) / 8);
     }
     size_t vectorMemory =
         (sizeof(int) * (ITEM_WEIGHTS.capacity() + ITEM_VALUES.capacity())) +
-        (sizeof(int) * result.selectedItems.capacity()) +
-        (sizeof(ItemProperty) * SORTED_ITEMS.capacity());
+        (sizeof(int) * result.selectedItems.capacity());
     result.memoryUsed = populationMemory + vectorMemory;
 
     return result;
@@ -473,6 +463,8 @@ int main(int argc, char *argv[]) {
     // Resize vectors to hold item data.
     ITEM_WEIGHTS.resize(n);
     ITEM_VALUES.resize(n);
+    // Resize helper vector for repair function.
+    included_indices.resize(NUM_ITEMS);
 
     // Read item weights.
     for (int i = 0; i < n; i++) {

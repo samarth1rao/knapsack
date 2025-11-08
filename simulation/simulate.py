@@ -94,6 +94,11 @@ class KnapsackSimulator:
                 "name": "Genetic Algorithm",
                 "sort_key": lambda n, w: n,  # n * P * G,
             },
+            "customalgorithm": {
+                "executable": self.algorithms_path / "bin" / "customalgorithm",
+                "name": "Custom Algorithm",
+                "sort_key": lambda n, w: n,
+            },
         }
         # Base timeout (seconds) used as part of adaptive timeout calculation
         self.base_timeout_seconds = 10.0
