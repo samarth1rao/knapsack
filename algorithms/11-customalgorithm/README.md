@@ -32,19 +32,13 @@ Instead of using fixed values, the `POPULATION_SIZE` and `MAX_GENERATIONS` are d
 |----------|----------------|------------------|-------|
 | `Individual::calculateMetrics()` | O(N) | O(1) | Iterates through all N items once |
 | `Individual::getFitness()` | O(1) | O(1) | Amortized constant time with caching |
-| `Individual::getWeight()` | O(1) | O(1) | Direct return of cached value |
+| `repairIndividual()` | O(N) | O(1) | Iterates through v/w-sorted items; worst case removes all |
 
 #### Preprocessing
 
 | Function | Time Complexity | Space Complexity | Notes |
 |----------|----------------|------------------|-------|
 | `preSortItems()` | O(N log N) | O(N) | Computes value/weight ratios O(N), sorts N items O(N log N) |
-
-#### Individual Manipulation
-
-| Function | Time Complexity | Space Complexity | Notes |
-|----------|----------------|------------------|-------|
-| `repairIndividual()` | O(N) | O(1) | Iterates through sorted items; worst case removes all items |
 
 #### Population Initialisation
 

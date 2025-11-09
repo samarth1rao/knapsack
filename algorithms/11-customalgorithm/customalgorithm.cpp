@@ -54,12 +54,6 @@ public:
     // Constructor to create an individual with a given number of items, initialised to false.
     Individual(int n) : bits(n, false) {}
 
-    // Constructor to create an individual from an existing bit string.
-    Individual(const std::vector<bool> &b) : bits(b) {
-        // Compute total value and weight upon creation.
-        calculateMetrics();
-    }
-
     // Calculates total value and weight from scratch. To be called after major changes.
     void calculateMetrics() {
         totalValue = 0;
@@ -81,7 +75,6 @@ public:
         if (fitnessValid) {
             return cachedFitness;
         }
-
         // Use pre-computed metrics to determine fitness.
         if (totalWeight > KNAPSACK_CAPACITY) {
             cachedFitness = 0;
@@ -89,15 +82,9 @@ public:
         else {
             cachedFitness = totalValue;
         }
-
         // Cache the fitness value.
         fitnessValid = true;
         return cachedFitness;
-    }
-
-    // Returns the total weight of the items selected by the individual.
-    int getWeight() const {
-        return totalWeight;
     }
 };
 
@@ -140,7 +127,7 @@ void repairIndividual(Individual &individual) {
     // Remove the worst items till the weight is within capacity.
     for (const auto &itemProp : SORTED_ITEMS) {
         // If the individual is within capacity, stop repair.
-        if (individual.getWeight() <= KNAPSACK_CAPACITY) {
+        if (individual.totalWeight <= KNAPSACK_CAPACITY) {
             break;
         }
         // Remove the item if it is included in the individual.

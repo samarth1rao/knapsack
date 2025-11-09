@@ -31,7 +31,7 @@ The Python code penalises overweight individuals by assigning them a fitness of 
 
 #### Efficient Tournament Selection
 
-The Python code shuffles the entire population list to select four individuals for a tournament, costing `O(P)` time. We instead select four random indices and ensure uniqueness by incrementing (modulo size), costing `O(1)` space and time.
+The Python code shuffles the entire population list to select four individuals for a tournament, costing `O(P)` time. We instead select four random indices and ensure uniqueness by incrementing (modulo `POPULATION_SIZE`), costing `O(1)` space and time.
 
 #### Dynamic Hyperparameters
 
@@ -45,7 +45,7 @@ Instead of using fixed values, the `POPULATION_SIZE` and `MAX_GENERATIONS` are d
 |----------|----------------|------------------|-------|
 | `Individual::calculateMetrics()` | O(N) | O(1) | Iterates through all N items once |
 | `Individual::getFitness()` | O(1) | O(1) | Amortized constant time with caching |
-| `repairIndividual()` | O(N) | O(N) | Collects indices O(N), then removes items; uses helper vector |
+| `repairIndividual()` | O(N) | O(N) | Collects indices O(N), then removes (worst case all); uses helper vector |
 
 #### Genetic Operators
 
