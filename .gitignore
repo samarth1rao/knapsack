@@ -1,5 +1,6 @@
 # ignore datasets
 /data/*.csv
+/data/gh_knapsackProblemInstances/
 # ignore simulation data and archives
 /simulation/archive/
 /simulation/logs/
@@ -12,6 +13,3 @@
 # ignore compiled python files
 **/bin/
 **/__pycache__/
-wrongvenv/
-# ignore test files
-**/test_greedy.py

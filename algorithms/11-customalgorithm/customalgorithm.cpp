@@ -413,14 +413,14 @@ void parseArguments(int argc, char *argv[]) {
             SEED = static_cast<unsigned int>(atoi(argv[++i]));
         }
         else if (arg == "--help" || arg == "-h") {
-            std::cerr << "Usage: " << argv[0] << " [options]" << std::endl;
-            std::cerr << "Options:" << std::endl;
-            std::cerr << "  --population_size <int>      Population size" << std::endl;
-            std::cerr << "  --max_generations <int>      Max generations" << std::endl;
-            std::cerr << "  --crossover_rate <float>     Crossover rate" << std::endl;
-            std::cerr << "  --mutation_rate <float>      Mutation rate" << std::endl;
-            std::cerr << "  --reproduction_rate <float>  Reproduction rate" << std::endl;
-            std::cerr << "  --seed <unsigned int>        Seed for random number generator" << std::endl;
+            std::cerr << "Usage: " << argv[0] << " [options]" << "\n";
+            std::cerr << "Options:" << "\n";
+            std::cerr << "  --population_size <int>      Population size" << "\n";
+            std::cerr << "  --max_generations <int>      Max generations" << "\n";
+            std::cerr << "  --crossover_rate <float>     Crossover rate" << "\n";
+            std::cerr << "  --mutation_rate <float>      Mutation rate" << "\n";
+            std::cerr << "  --reproduction_rate <float>  Reproduction rate" << "\n";
+            std::cerr << "  --seed <unsigned int>        Seed for random number generator" << "\n";
             exit(0);
         }
     }
@@ -495,16 +495,16 @@ int main(int argc, char *argv[]) {
     Result result = solveKnapsackGenetic();
 
     // Print the results in the required format.
-    std::cout << result.maxValue << std::endl;
-    std::cout << result.selectedItems.size() << std::endl;
+    std::cout << result.maxValue << "\n";
+    std::cout << result.selectedItems.size() << "\n";
     if (!result.selectedItems.empty()) {
         for (size_t i = 0; i < result.selectedItems.size(); ++i) {
             std::cout << result.selectedItems[i] << (i == result.selectedItems.size() - 1 ? "" : " ");
         }
-        std::cout << std::endl;
+        std::cout << "\n";
     }
-    std::cout << result.executionTime << std::endl;
-    std::cout << result.memoryUsed << std::endl;
+    std::cout << result.executionTime << "\n";
+    std::cout << result.memoryUsed << "\n";
 
     return 0;
 }

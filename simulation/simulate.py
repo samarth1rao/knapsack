@@ -123,9 +123,6 @@ class KnapsackSimulator:
         # Parse list columns
         df_filtered["weights"] = df_filtered["weights"].apply(self.parse_list_string)
         df_filtered["prices"] = df_filtered["prices"].apply(self.parse_list_string)
-        df_filtered["best_picks"] = df_filtered["best_picks"].apply(
-            self.parse_list_string
-        )
 
         return df_filtered, total_rows
 
