@@ -5,9 +5,7 @@ Runs various knapsack algorithms and generates comprehensive visualisations
 """
 
 import ast
-import json
 import logging
-import os
 import platform
 import re
 import shutil
@@ -17,7 +15,6 @@ from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
 
@@ -718,11 +715,11 @@ def main():
     # --- Define the simulation runs here ---
     # Format: [dataset_name, category, optional_timeout_in_seconds]
     simulation_runs = [
-        ["knapsack_dataset.csv", "Tiny"],
-        # ["knapsack_dataset_l012_400.csv", "Tiny", 4],
-        # ["knapsack_dataset_l012_400.csv", "Small", 8],
-        # ["knapsack_dataset_l012_400.csv", "Medium", 15],
-        # ["knapsack_dataset_l3_20.csv", "Large", 450],
+        ["knapsack_trap_dataset.csv", "Tiny"],
+        # ["knapsack_trap_dataset_l012_400.csv", "Tiny", 4],
+        # ["knapsack_trap_dataset_l012_400.csv", "Small", 8],
+        # ["knapsack_trap_dataset_l012_400.csv", "Medium", 15],
+        # ["knapsack_trap_dataset_l3_20.csv", "Large", 450],
     ]
 
     # Create simulator

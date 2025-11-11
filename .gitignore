@@ -10,6 +10,6 @@
 **/.vscode/
 **/.venv/
 **/venv/
-# ignore compiled python files
+# ignore compiled files
 **/bin/
 **/__pycache__/
