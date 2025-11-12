@@ -464,7 +464,7 @@ class KnapsackSimulator:
                     algo_names.append(self.algorithms[algo]["name"])
 
         if accuracies:
-            plt.boxplot(accuracies, tick_labels=algo_names, patch_artist=True)
+            plt.boxplot(accuracies, labels=algo_names, patch_artist=True) # pyright: ignore[reportCallIssue]
             plt.ylabel("Accuracy (%)", fontsize=12, fontweight="bold")
             plt.title("Solution Quality Distribution", fontsize=14, fontweight="bold")
             plt.grid(True, alpha=0.3, axis="y")
