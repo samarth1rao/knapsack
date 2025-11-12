@@ -27,7 +27,7 @@ Other than re-implementing the reference Python code (see [References](#referenc
 
 #### Repairing Invalid Solutions
 
-The Python code penalises overweight individuals by assigning them a fitness of 0. Our C++ implementation includes a `repairIndividual` function that instead iteratively removes items randomly till the weight is valid. This allows solutions to propagate between generations, as it otherwise becomes increasingly likely for individuals to get overweight from random initialisation and mutations with large `N`.
+The Python code penalises overweight individuals by assigning them a fitness of 0. Our C++ implementation includes a `Individual::repair` function that instead iteratively removes items randomly till the weight is valid. This allows solutions to propagate between generations, as it otherwise becomes increasingly likely for individuals to get overweight from random initialisation and mutations with large `N`.
 
 #### Efficient Tournament Selection
 
@@ -45,7 +45,7 @@ Instead of using fixed values, the `POPULATION_SIZE` and `MAX_GENERATIONS` are d
 |----------|----------------|------------------|-------|
 | `Individual::calculateMetrics()` | O(N) | O(1) | Iterates through all N items once |
 | `Individual::getFitness()` | O(1) | O(1) | Amortized constant time with caching |
-| `repairIndividual()` | O(N) | O(N) | Collects indices O(N), then removes (worst case all); uses helper vector |
+| `Individual::repair()` | O(N) | O(N) | Collects indices O(N), then removes (worst case all); uses helper vector |
 
 #### Genetic Operators
 

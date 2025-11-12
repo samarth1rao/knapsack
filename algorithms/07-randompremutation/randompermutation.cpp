@@ -2,9 +2,11 @@
 using namespace std;
 using namespace std::chrono;
 
+using int64 = long long;
+
 struct Item {
-    int weight;
-    int value;
+    int64 weight;
+    int64 value;
     int index;
 };
 
@@ -13,17 +15,17 @@ int main() {
     cin.tie(nullptr);
 
     // --- Input parsing ---
-    int n, W;
+    int64 n, W;
     if (!(cin >> n >> W)) return 0;
 
-    vector<int> weights(n), values(n);
-    for (int i = 0; i < n; ++i) cin >> weights[i];
-    for (int i = 0; i < n; ++i) cin >> values[i];
+    vector<int64> weights(n), values(n);
+    for (int64 i = 0; i < n; ++i) cin >> weights[i];
+    for (int64 i = 0; i < n; ++i) cin >> values[i];
 
     vector<Item> items(n);
-    int wmax = 0;
-    for (int i = 0; i < n; ++i) {
-        items[i] = {weights[i], values[i], i};
+    int64 wmax = 0;
+    for (int64 i = 0; i < n; ++i) {
+        items[i] = { weights[i], values[i], (int)i };
         wmax = max(wmax, weights[i]);
     }
 
@@ -36,31 +38,31 @@ int main() {
     auto start = high_resolution_clock::now();
 
     // --- DP computation ---
-    const int NEG_INF = -1e9;
-    vector<int> prev(W + 1, NEG_INF), curr(W + 1, NEG_INF);
+    const int64 NEG_INF = -1e15;
+    vector<int64> prev(W + 1, NEG_INF), curr(W + 1, NEG_INF);
     prev[0] = 0;
 
     // Parent tracking for reconstruction
-    vector<vector<int>> parent(n + 1, vector<int>(W + 1, -1));
+    vector<vector<int64>> parent(n + 1, vector<int64>(W + 1, -1));
 
-    for (int i = 1; i <= n; ++i) {
+    for (int64 i = 1; i <= n; ++i) {
         double mu = (1.0 * i / n) * W;
-        double delta = sqrt(i * log(max(2, n))) * wmax;
-        int low = max(0, (int)floor(mu - delta));
-        int high = min(W, (int)ceil(mu + delta));
+        double delta = sqrt(i * log(max(int64(2), n))) * wmax;
+        int64 low = max(int64(0), (int64)floor(mu - delta));
+        int64 high = min(W, (int64)ceil(mu + delta));
 
         fill(curr.begin() + low, curr.begin() + high + 1, NEG_INF);
 
-        for (int j = low; j <= high; ++j) {
+        for (int64 j = low; j <= high; ++j) {
             // Option 1: don't take
             curr[j] = prev[j];
             parent[i][j] = j;
 
             // Option 2: take item i-1
-            int w = items[i - 1].weight;
-            int v = items[i - 1].value;
+            int64 w = items[i - 1].weight;
+            int64 v = items[i - 1].value;
             if (j >= w && prev[j - w] != NEG_INF) {
-                int candidate = prev[j - w] + v;
+                int64 candidate = prev[j - w] + v;
                 if (candidate > curr[j]) {
                     curr[j] = candidate;
                     parent[i][j] = j - w;
@@ -71,8 +73,8 @@ int main() {
     }
 
     // --- Get best value and reconstruct solution ---
-    int best_val = 0, best_w = 0;
-    for (int j = 0; j <= W; ++j) {
+    int64 best_val = 0, best_w = 0;
+    for (int64 j = 0; j <= W; ++j) {
         if (prev[j] > best_val) {
             best_val = prev[j];
             best_w = j;
@@ -81,9 +83,9 @@ int main() {
 
     // Backtrack selected items
     vector<int> chosen;
-    int j = best_w;
-    for (int i = n; i >= 1; --i) {
-        int pj = parent[i][j];
+    int64 j = best_w;
+    for (int64 i = n; i >= 1; --i) {
+        int64 pj = parent[i][j];
         if (pj == -1) continue;
         if (pj != j) { // item was taken
             chosen.push_back(items[i - 1].index);
@@ -98,7 +100,7 @@ int main() {
     auto exec_time = duration_cast<microseconds>(end - start).count();
 
     // --- Rough memory usage estimation ---
-    size_t mem_bytes = sizeof(int) * (2 * (W + 1) + (size_t)(n + 1) * (W + 1));
+    size_t mem_bytes = sizeof(int64) * (2 * (W + 1) + (size_t)(n + 1) * (W + 1));
 
     // --- Output (strict format) ---
     cout << best_val << "\n";

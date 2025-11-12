@@ -6,17 +6,19 @@
 
 using namespace std;
 
+using int64 = long long;
+
 // Struct to hold item information for sorting
 struct Item {
-    int weight;
-    int value;
+    int64 weight;
+    int64 value;
     int index;
     double density; // value/weight ratio
 };
 
 // Result struct to hold all output
 struct Result {
-    int maxValue;
+    int64 maxValue;
     vector<int> selectedItems;
     long long executionTime; // in microseconds
     size_t memoryUsed; // in bytes (approximate)
@@ -30,7 +32,7 @@ struct Result {
  * @param values Const reference to the item values vector.
  * @return A Result struct containing the solution, time, and memory.
  */
-Result solveKnapsackGreedy(int capacity, const vector<int> &weights, const vector<int> &values) {
+Result solveKnapsackGreedy(int64 capacity, const vector<int64> &weights, const vector<int64> &values) {
     Result result;
     int n = weights.size();
 
@@ -52,8 +54,8 @@ Result solveKnapsackGreedy(int capacity, const vector<int> &weights, const vecto
         });
 
     // Greedily select items
-    int currentWeight = 0;
-    int currentValue = 0;
+    int64 currentWeight = 0;
+    int64 currentValue = 0;
 
     for (const auto &item : items) {
         // If adding this item doesn't exceed capacity, add it
@@ -76,7 +78,7 @@ Result solveKnapsackGreedy(int capacity, const vector<int> &weights, const vecto
     // Approximate memory used
     size_t itemVectorMemory = sizeof(Item) * n;
     size_t resultVectorMemory = sizeof(int) * result.selectedItems.size();
-    size_t inputVectorsMemory = (sizeof(int) * weights.size()) + (sizeof(int) * values.size());
+    size_t inputVectorsMemory = (sizeof(int64) * weights.size()) + (sizeof(int64) * values.size());
     result.memoryUsed = itemVectorMemory + resultVectorMemory + inputVectorsMemory;
 
     return result;
@@ -88,11 +90,12 @@ int main(int argc, char *argv[]) {
     std::cin.tie(nullptr);
 
     // Read input from stdin
-    int n, capacity;
+    int n;
+    int64 capacity;
     cin >> n >> capacity;
 
-    vector<int> weights(n);
-    vector<int> values(n);
+    vector<int64> weights(n);
+    vector<int64> values(n);
 
     for (int i = 0; i < n; i++) {
         cin >> weights[i];

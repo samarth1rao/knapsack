@@ -6,10 +6,12 @@
 #include <numeric>
 #include <cstring>
 
+// Use int64 for large numbers
+using int64 = long long;
 
 // Struct to hold the results of the genetic algorithm.
 struct Result {
-    int maxValue;                   // The maximum value found for the knapsack.
+    int64 maxValue;                 // The maximum value found for the knapsack.
     std::vector<int> selectedItems; // The indices of the items selected to achieve the max value.
     long long executionTime;        // Total execution time in microseconds.
     size_t memoryUsed;              // Approximate memory usage in bytes.
@@ -31,9 +33,9 @@ double REPRODUCTION_RATE = 0.15;            // Probability of direct reproductio
 unsigned int SEED = std::random_device()(); // Seed for random number generator.
 
 // Global variables for the knapsack problem instance.
-int KNAPSACK_CAPACITY;                  // Maximum weight the knapsack can hold.
-std::vector<int> ITEM_WEIGHTS;          // Weights of the items.
-std::vector<int> ITEM_VALUES;           // Values of the items.
+int64 KNAPSACK_CAPACITY;                // Maximum weight the knapsack can hold.
+std::vector<int64> ITEM_WEIGHTS;        // Weights of the items.
+std::vector<int64> ITEM_VALUES;         // Values of the items.
 int NUM_ITEMS;                          // Total number of items.
 
 // Global random number generator and helper vector.
@@ -46,9 +48,9 @@ std::vector<int> included_indices;  // Helper vector for repair function.
 class Individual {
 public:
     std::vector<bool> bits;             // A bit string representing item selection.
-    int totalValue = 0;                 // Cached total value of selected items.
-    int totalWeight = 0;                // Cached total weight of selected items.
-    mutable int cachedFitness = -1;     // Cached fitness value to avoid re-computation.
+    int64 totalValue = 0;               // Cached total value of selected items.
+    int64 totalWeight = 0;              // Cached total weight of selected items.
+    mutable int64 cachedFitness = -1;   // Cached fitness value to avoid re-computation.
     mutable bool fitnessValid = false;  // Flag to check if the cached fitness is valid.
 
     // Constructor to create an individual with a given number of items, initialised to false.
@@ -70,7 +72,7 @@ public:
 
     // Calculates the fitness of the individual.
     // Fitness is the total value of selected items or 0 if over capacity.
-    int getFitness() const {
+    int64 getFitness() const {
         // Return cached fitness if it's valid.
         if (fitnessValid) {
             return cachedFitness;
@@ -86,45 +88,41 @@ public:
         fitnessValid = true;
         return cachedFitness;
     }
-};
 
-
-// Repairs an individual that is overweight (total weight > knapsack capacity).
-// It randomly removes items until the individual is valid.
-void repairIndividual(Individual &individual) {
-    // Calculate the current weight of the individual.
-    if (individual.totalWeight <= KNAPSACK_CAPACITY) {
-        return;
-    }
-
-    // Collect indices of items that are currently included in the knapsack.
-    int included_count = 0;
-    for (int i = 0; i < NUM_ITEMS; ++i) {
-        if (individual.bits[i] == 1) {
-            included_indices[included_count++] = i;
+    // Repairs an individual that is overweight (total weight > knapsack capacity).
+    // It randomly removes items until the individual is valid.
+    void repair() {
+        // Calculate the current weight of the individual.
+        if (totalWeight <= KNAPSACK_CAPACITY) {
+            return;
         }
+        // Collect indices of items that are currently included in the knapsack.
+        int included_count = 0;
+        for (int i = 0; i < NUM_ITEMS; ++i) {
+            if (bits[i] == 1) {
+                included_indices[included_count++] = i;
+            }
+        }
+        // Randomly remove items until the individual is within capacity.
+        while (totalWeight > KNAPSACK_CAPACITY) {
+            // Distribution for generating random indices.
+            std::uniform_int_distribution<int> dist(0, included_count - 1);
+            // Select a random item to remove.
+            int random_vector_index = dist(rng);
+            int item_index = included_indices[random_vector_index];
+
+            // Remove the item from the individual.
+            included_indices[random_vector_index] = included_indices[--included_count];
+
+            // Update individual's bit string and metrics.
+            bits[item_index] = 0;
+            totalWeight -= ITEM_WEIGHTS[item_index];
+            totalValue -= ITEM_VALUES[item_index];
+        }
+        // Invalidate the fitness cache as the individual has been modified.
+        fitnessValid = false;
     }
-
-    // Randomly remove items until the individual is within capacity.
-    while (individual.totalWeight > KNAPSACK_CAPACITY) {
-        // Distribution for generating random indices.
-        std::uniform_int_distribution<int> dist(0, included_count - 1);
-        // Select a random item to remove.
-        int random_vector_index = dist(rng);
-        int item_index = included_indices[random_vector_index];
-
-        // Remove the item from the individual.
-        included_indices[random_vector_index] = included_indices[--included_count];
-
-        // Update individual's bit string and metrics.
-        individual.bits[item_index] = 0;
-        individual.totalWeight -= ITEM_WEIGHTS[item_index];
-        individual.totalValue -= ITEM_VALUES[item_index];
-    }
-
-    // Invalidate the fitness cache as the individual has been modified.
-    individual.fitnessValid = false;
-}
+};
 
 
 // Generates the initial population of random individuals.
@@ -148,7 +146,7 @@ std::vector<Individual> generateInitialPopulation() {
 
     // Repair any individuals in the initial population that are overweight.
     for (auto &individual : population) {
-        repairIndividual(individual);
+        individual.repair();
     }
 
     return population;
@@ -289,13 +287,13 @@ void nextGeneration(const std::vector<Individual> &currentPop, std::vector<Indiv
 
             // Mutate and repair child1.
             mutate(child1);
-            repairIndividual(child1);
+            child1.repair();
             i++;
 
             // Mutate and repair child2 if there's space in the population.
             if (i < static_cast<size_t>(POPULATION_SIZE) && &child1 != &child2) {
                 mutate(child2);
-                repairIndividual(child2);
+                child2.repair();
                 i++;
             }
         }
@@ -352,12 +350,13 @@ Result solveKnapsackGenetic() {
         populationMemory += sizeof(Individual) + ((ind.bits.capacity() + 7) / 8);
     }
     size_t vectorMemory =
-        (sizeof(int) * (ITEM_WEIGHTS.capacity() + ITEM_VALUES.capacity())) +
+        (sizeof(int64) * (ITEM_WEIGHTS.capacity() + ITEM_VALUES.capacity())) +
         (sizeof(int) * result.selectedItems.capacity());
     result.memoryUsed = populationMemory + vectorMemory;
 
     return result;
 }
+
 
 // Parses command-line arguments to override default hyperparameters.
 void parseArguments(int argc, char *argv[]) {
@@ -408,7 +407,8 @@ int main(int argc, char *argv[]) {
     rng.seed(SEED);
 
     // Read problem instance from standard input.
-    int n, capacity;
+    int n;
+    int64 capacity;
     std::cin >> n >> capacity;
 
     // Set instance variables.

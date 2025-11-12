@@ -32,7 +32,7 @@ Instead of using fixed values, the `POPULATION_SIZE` and `MAX_GENERATIONS` are d
 |----------|----------------|------------------|-------|
 | `Individual::calculateMetrics()` | O(N) | O(1) | Iterates through all N items once |
 | `Individual::getFitness()` | O(1) | O(1) | Amortized constant time with caching |
-| `repairIndividual()` | O(N) | O(1) | Iterates through v/w-sorted items; worst case removes all |
+| `Individual::repair()` | O(N) | O(1) | Iterates through v/w-sorted items; worst case removes all |
 
 #### Preprocessing
 

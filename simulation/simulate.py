@@ -64,7 +64,7 @@ class KnapsackSimulator:
             "branchandbound": {
                 "executable": self.algorithms_path / "bin" / "branchandbound",
                 "name": "Branch and Bound",
-                "sort_key": lambda n, w: n,  # 2**n,
+                "sort_key": lambda n, w: n,
             },
             "meetinthemiddle": {
                 "executable": self.algorithms_path / "bin" / "meetinthemiddle",
@@ -99,6 +99,8 @@ class KnapsackSimulator:
         }
         # Base timeout (seconds) used as part of adaptive timeout calculation
         self.base_timeout_seconds = 10.0
+        # Memory limit for subprocesses in GB. Set to None to disable.
+        self.memory_limit_gb = 40
 
     def parse_list_string(self, s):
         """Parse string representation of list to actual list"""
@@ -157,6 +159,19 @@ class KnapsackSimulator:
             timeout_seconds = custom_timeout
 
         try:
+            # Resource limiting for the child process (Unix-only)
+            if platform.system() != "Windows" and self.memory_limit_gb is not None:
+                import resource
+
+                def limit_resources():
+                    # Set max virtual memory
+                    mem_bytes = self.memory_limit_gb * 1024 * 1024 * 1024
+                    resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+            else:
+
+                def limit_resources():
+                    pass
+
             # Build the command. On Windows, prefer running via WSL when executable is a *nix binary.
             if platform.system() == "Windows" and shutil.which("wsl"):
                 # Try to convert Windows path to a WSL-compatible path.
@@ -180,6 +195,7 @@ class KnapsackSimulator:
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,
+                preexec_fn=limit_resources,
             )
             end = time.perf_counter()
             elapsed_us = int((end - start) * 1_000_000)
@@ -324,7 +340,7 @@ class KnapsackSimulator:
                     results_df.at[idx, f"{algo_name}_optimal"] = is_optimal
 
                     logger.info(
-                        f"  -> Value: {result['max_value']}, Time: {result['execution_time']}μs, Optimal: {is_optimal}"
+                        f"  -> Value: {result['max_value']}, Time: {result['execution_time']}μs, Accuracy: {accuracy:.2f}%, Optimal: {is_optimal}"
                     )
                 else:
                     consecutive_failures += 1
@@ -715,11 +731,21 @@ def main():
     # --- Define the simulation runs here ---
     # Format: [dataset_name, category, optional_timeout_in_seconds]
     simulation_runs = [
-        ["knapsack_trap_dataset.csv", "Tiny"],
+        # -- Default --
+        ["knapsack_dataset.csv", "Tiny"],
+        # -- Easy --
+        # ["knapsack_easy_dataset_l012_400.csv", "Tiny", 4],
+        # ["knapsack_easy_dataset_l012_400.csv", "Small", 8],
+        # ["knapsack_easy_dataset_l012_400.csv", "Medium", 12],
+        # ["knapsack_easy_dataset_l3_40.csv", "Large", 300],
+        # # -- Trap --
         # ["knapsack_trap_dataset_l012_400.csv", "Tiny", 4],
         # ["knapsack_trap_dataset_l012_400.csv", "Small", 8],
-        # ["knapsack_trap_dataset_l012_400.csv", "Medium", 15],
-        # ["knapsack_trap_dataset_l3_20.csv", "Large", 450],
+        # ["knapsack_trap_dataset_l012_400.csv", "Medium", 12],
+        # ["knapsack_trap_dataset_l3_40.csv", "Large", 300],
+        # -- Hard --
+        # ["knapsack_hard_dataset.csv", "known", 1],
+        # ["knapsack_hard_dataset.csv", "unknown", 8],
     ]
 
     # Create simulator

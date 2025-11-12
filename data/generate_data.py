@@ -302,7 +302,11 @@ def main():
             sys.exit(1)
 
         # Simple progress bar
-        print(f"  ... Wrote problem {i + 1}/{len(specs)} (n={n}, cat={cat})", end="\r")
+        print(
+            f"  ... Wrote problem {i + 1}/{len(specs)} (n={n}, cat={cat})",
+            end="\r",
+            flush=True,
+        )
 
         # Hint to GC
         if (i + 1) % 100 == 0:
