@@ -65,22 +65,30 @@ int main() {
     }
 
     // Hyperparameters (tuneable inside code or by editing)
-    double alpha = 0.05;        // learning rate for multiplicative update
-    double tol = 1e-4;          // relative tolerance for capacity
-    int max_iters = 1000;       // safety cap
+    // OPTIMIZATION: Increased learning rate for faster convergence on hard instances
+    double alpha = 0.15;        // learning rate for multiplicative update (increased from 0.05)
+    // OPTIMIZATION: Relaxed tolerance for better performance on large-scale problems
+    double tol = 1e-3;          // relative tolerance for capacity (relaxed from 1e-4)
+    // OPTIMIZATION: Increased max iterations for harder problem instances
+    int max_iters = 5000;       // safety cap (increased from 1000)
     double lambda = 0.0;        // initial lambda; will set below heuristically
 
-    // Heuristic initial lambda: average profit/weight (avoid division by zero)
-    double sum_pw = 0.0;
-    double sum_w = 0.0;
+    // OPTIMIZATION: Better initial lambda using median profit/weight ratio
+    // This works better for hard instances with similar ratios
+    vector<double> ratios;
+    ratios.reserve(n);
     for (int i = 0; i < n; ++i) {
         if (weights[i] > 0) {
-            sum_pw += static_cast<double>(profits[i]) / static_cast<double>(weights[i]);
-            sum_w += 1.0;
+            ratios.push_back(static_cast<double>(profits[i]) / static_cast<double>(weights[i]));
         }
     }
-    if (sum_w > 0.0) lambda = sum_pw / sum_w;
-    else lambda = 0.0;
+    if (!ratios.empty()) {
+        // Use median ratio instead of mean for better robustness
+        sort(ratios.begin(), ratios.end());
+        lambda = ratios[ratios.size() / 2];
+    } else {
+        lambda = 0.0;
+    }
 
     vector<char> x(n, 0); // selected flags (0/1)
 
@@ -168,28 +176,51 @@ int main() {
         selected_indices.push_back(i);
     }
 
+    // OPTIMIZATION: Improved postprocessing for better solution quality on hard instances
     if (total_weight > W) {
-        // create vector of (ratio, index, weight, profit) for selected items
-        vector<tuple<double, int64, int64, int64>> sel;
+        // Strategy: Remove items with smallest profit first (preserves high-value items)
+        vector<tuple<int64, int64, int64>> sel; // (profit, index, weight)
         sel.reserve(selected_indices.size());
         for (int64 idx : selected_indices) {
-            double ratio;
-            if (weights[idx] > 0) ratio = static_cast<double>(profits[idx]) / static_cast<double>(weights[idx]);
-            else ratio = numeric_limits<double>::infinity();
-            sel.emplace_back(ratio, idx, weights[idx], profits[idx]);
+            sel.emplace_back(profits[idx], idx, weights[idx]);
         }
-        // sort ascending by ratio (worst items first), break ties by smallest profit
-        sort(sel.begin(), sel.end(), [](const auto &a, const auto &b) {
-            if (get<0>(a) != get<0>(b)) return get<0>(a) < get<0>(b);
-            return get<3>(a) < get<3>(b);
-            });
+        // sort by profit ascending (remove smallest profit first)
+        sort(sel.begin(), sel.end());
+        
         // remove items until feasible
         for (auto &t : sel) {
             if (total_weight <= W) break;
             int64 idx = get<1>(t);
             total_weight -= get<2>(t);
-            total_value -= get<3>(t);
+            total_value -= get<0>(t);
             x[idx] = 0;
+        }
+    }
+    
+    // OPTIMIZATION: Greedy improvement pass - try adding back items that fit
+    if (total_weight <= W) {
+        vector<tuple<double, int64, int64, int64>> available; // (ratio, index, weight, profit)
+        for (int64 i = 0; i < n; ++i) {
+            if (!x[i] && weights[i] > 0 && total_weight + weights[i] <= W) {
+                double ratio = static_cast<double>(profits[i]) / static_cast<double>(weights[i]);
+                available.emplace_back(ratio, i, weights[i], profits[i]);
+            }
+        }
+        // sort by ratio descending (best items first)
+        sort(available.begin(), available.end(), [](const auto &a, const auto &b){
+            return get<0>(a) > get<0>(b);
+        });
+        
+        // add items that fit
+        for (auto &t : available) {
+            int64 idx = get<1>(t);
+            int64 w = get<2>(t);
+            int64 p = get<3>(t);
+            if (total_weight + w <= W) {
+                x[idx] = 1;
+                total_weight += w;
+                total_value += p;
+            }
         }
     }
 
