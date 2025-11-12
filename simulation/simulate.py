@@ -464,7 +464,7 @@ class KnapsackSimulator:
                     algo_names.append(self.algorithms[algo]["name"])
 
         if accuracies:
-            plt.boxplot(accuracies, labels=algo_names, patch_artist=True) # pyright: ignore[reportCallIssue]
+            plt.boxplot(accuracies, labels=algo_names, patch_artist=True)  # pyright: ignore[reportCallIssue]
             plt.ylabel("Accuracy (%)", fontsize=12, fontweight="bold")
             plt.title("Solution Quality Distribution", fontsize=14, fontweight="bold")
             plt.grid(True, alpha=0.3, axis="y")
@@ -686,7 +686,8 @@ class KnapsackSimulator:
         plt.close()
 
         logger.info("Summary Statistics:")
-        logger.info(summary_df.to_string(index=False))
+        for line in summary_df.to_string(index=False).split("\n"):
+            logger.info(line)
 
     def _prepare_run_order(self, df):
         """Pre-calculates the run order for all algorithms."""
