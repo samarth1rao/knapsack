@@ -734,15 +734,15 @@ def main():
         # -- Default --
         ["knapsack_dataset.csv", "Tiny"],
         # -- Easy --
-        # ["knapsack_easy_dataset_l012_400.csv", "Tiny", 4],
-        # ["knapsack_easy_dataset_l012_400.csv", "Small", 8],
-        # ["knapsack_easy_dataset_l012_400.csv", "Medium", 12],
-        # ["knapsack_easy_dataset_l3_40.csv", "Large", 300],
+        # ["knapsack_easy_dataset_l012_400.csv", "ETiny", 4],
+        # ["knapsack_easy_dataset_l012_400.csv", "ESmall", 8],
+        # ["knapsack_easy_dataset_l012_400.csv", "EMedium", 12],
+        # ["knapsack_easy_dataset_l3_40.csv", "ELarge", 300],
         # # -- Trap --
-        # ["knapsack_trap_dataset_l012_400.csv", "Tiny", 4],
-        # ["knapsack_trap_dataset_l012_400.csv", "Small", 8],
-        # ["knapsack_trap_dataset_l012_400.csv", "Medium", 12],
-        # ["knapsack_trap_dataset_l3_40.csv", "Large", 300],
+        # ["knapsack_trap_dataset_l012_400.csv", "TTiny", 4],
+        # ["knapsack_trap_dataset_l012_400.csv", "TSmall", 8],
+        # ["knapsack_trap_dataset_l012_400.csv", "TMedium", 12],
+        # ["knapsack_trap_dataset_l3_40.csv", "TLarge", 300],
         # -- Hard --
         # ["knapsack_hard_dataset.csv", "known", 1],
         # ["knapsack_hard_dataset.csv", "unknown", 8],

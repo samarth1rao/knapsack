@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::string filepath = argv[1];
-    std::string category = argv[2];
+    std::string category = "T" + std::string(argv[2]);
     int64 n = std::stoll(argv[3]);
     int64 base_capacity = std::stoll(argv[4]);
     int seed = std::stoi(argv[5]);
