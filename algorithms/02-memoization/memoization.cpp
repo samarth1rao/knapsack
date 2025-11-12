@@ -2,13 +2,15 @@
 #include <chrono>
 using namespace std;
 using namespace std::chrono;
+using int64 = long long;
 
-vector<int> weights, values;
-vector<vector<int>> memo;
-int n, capacity;
+vector<int64> weights, values;
+vector<vector<int64>> memo;
+int n;
+int64 capacity;
 
 // Recursive function with memoization
-int knapsack_memoization(int i, int remaining_capacity) {
+int64 knapsack_memoization(int i, int64 remaining_capacity) {
     if (i == 0 || remaining_capacity == 0)
         return 0;
 
@@ -18,8 +20,8 @@ int knapsack_memoization(int i, int remaining_capacity) {
     if (weights[i - 1] > remaining_capacity)
         return memo[i][remaining_capacity] = knapsack_memoization(i - 1, remaining_capacity);
     else {
-        int include_item = values[i - 1] + knapsack_memoization(i - 1, remaining_capacity - weights[i - 1]);
-        int exclude_item = knapsack_memoization(i - 1, remaining_capacity);
+        int64 include_item = values[i - 1] + knapsack_memoization(i - 1, remaining_capacity - weights[i - 1]);
+        int64 exclude_item = knapsack_memoization(i - 1, remaining_capacity);
         return memo[i][remaining_capacity] = max(include_item, exclude_item);
     }
 }
@@ -27,7 +29,8 @@ int knapsack_memoization(int i, int remaining_capacity) {
 // Function to reconstruct the chosen items
 vector<int> reconstruct_solution() {
     vector<int> selected_items;
-    int i = n, w = capacity;
+    int i = n;
+    int64 w = capacity;
 
     while (i > 0 && w > 0) {
         if (memo[i][w] != memo[i - 1][w]) {
@@ -39,6 +42,7 @@ vector<int> reconstruct_solution() {
     reverse(selected_items.begin(), selected_items.end());
     return selected_items;
 }
+
 
 int main() {
     ios::sync_with_stdio(false);
@@ -53,18 +57,16 @@ int main() {
     for (int i = 0; i < n; i++)
         cin >> values[i];
 
-    memo.assign(n + 1, vector<int>(capacity + 1, -1));
+    memo.assign(n + 1, vector<int64>(capacity + 1, -1));
 
     auto start = high_resolution_clock::now();
-    int max_value = knapsack_memoization(n, capacity);
+    int64 max_value = knapsack_memoization(n, capacity);
+    vector<int> selected_items = reconstruct_solution();
     auto end = high_resolution_clock::now();
-
     auto duration = duration_cast<microseconds>(end - start).count();
 
-    vector<int> selected_items = reconstruct_solution();
-
     // Approximate memory used (arrays + memo table)
-    size_t memory_used = sizeof(int) * ((n + 1) * (capacity + 1) + n * 2);
+    size_t memory_used = sizeof(int64) * ((n + 1) * (capacity + 1)) + sizeof(int64) * n * 2;
 
     cout << max_value << "\n";
     cout << selected_items.size() << "\n";

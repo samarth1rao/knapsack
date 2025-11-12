@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -6,30 +7,32 @@
 #include <limits>
 
 using namespace std;
+using int64 = long long;
 
 // Struct to represent a node in the branch and bound tree
 struct Node {
     int level;      // Current item index being considered
-    int value;      // Current total value
-    int weight;     // Current total weight
+    int64 value;    // Current total value
+    int64 weight;   // Current total weight
     double bound;   // Upper bound on maximum value
     vector<int> selectedItems; // Items selected so far
 
     // Constructor
-    Node(int l, int v, int w, double b, const vector<int>& sel)
-        : level(l), value(v), weight(w), bound(b), selectedItems(sel) {}
+    Node(int l, int64 v, int64 w, double b, const vector<int> &sel)
+        : level(l), value(v), weight(w), bound(b), selectedItems(sel) {
+    }
 
     // For priority queue (max-heap based on bound)
-    bool operator<(const Node& other) const {
+    bool operator<(const Node &other) const {
         return bound < other.bound;
     }
 };
 
 // Result struct to hold all output
 struct Result {
-    int maxValue;
+    int64 maxValue;
     vector<int> selectedItems;
-    long long executionTime; // in microseconds
+    int64 executionTime; // in microseconds
     size_t memoryUsed; // in bytes (approximate)
 };
 
@@ -42,14 +45,14 @@ struct Result {
  * @param values Item values
  * @return Upper bound on maximum value from this node
  */
-double calculateBound(const Node& node, int n, int capacity,
-                     const vector<int>& weights, const vector<int>& values) {
+double calculateBound(const Node &node, int n, int64 capacity,
+    const vector<int> &weights, const vector<int> &values) {
     if (node.weight >= capacity) {
         return 0; // Invalid node
     }
 
-    double bound = node.value;
-    int remainingWeight = capacity - node.weight;
+    double bound = static_cast<double>(node.value);
+    int64 remainingWeight = capacity - node.weight;
     int j = node.level + 1;
 
     // Add items greedily (fractional knapsack)
@@ -58,7 +61,8 @@ double calculateBound(const Node& node, int n, int capacity,
             // Take the whole item
             bound += values[j];
             remainingWeight -= weights[j];
-        } else {
+        }
+        else {
             // Take fraction of the item
             bound += values[j] * (static_cast<double>(remainingWeight) / weights[j]);
             remainingWeight = 0;
@@ -76,7 +80,7 @@ double calculateBound(const Node& node, int n, int capacity,
  * @param values Const reference to the item values vector
  * @return A Result struct containing the solution, time, and memory
  */
-Result solveKnapsackBranchAndBound(int capacity, const vector<int>& weights, const vector<int>& values) {
+Result solveKnapsackBranchAndBound(int64 capacity, const vector<int> &weights, const vector<int> &values) {
     Result result;
     int n = weights.size();
 
@@ -100,7 +104,7 @@ Result solveKnapsackBranchAndBound(int capacity, const vector<int>& weights, con
         pq.pop();
 
         // If bound is worse than current best, prune
-        if (current.bound <= result.maxValue) {
+        if (current.bound <= static_cast<double>(result.maxValue)) {
             continue;
         }
 
@@ -120,10 +124,10 @@ Result solveKnapsackBranchAndBound(int capacity, const vector<int>& weights, con
         // Branch 1: Don't take the item
         {
             Node child(nextLevel, current.value, current.weight,
-                      0.0, current.selectedItems);
+                0.0, current.selectedItems);
             child.bound = calculateBound(child, n, capacity, weights, values);
 
-            if (child.bound > result.maxValue) {
+            if (child.bound > static_cast<double>(result.maxValue)) {
                 pq.push(child);
             }
         }
@@ -134,13 +138,13 @@ Result solveKnapsackBranchAndBound(int capacity, const vector<int>& weights, con
             newSelected.push_back(nextLevel);
 
             Node child(nextLevel,
-                      current.value + values[nextLevel],
-                      current.weight + weights[nextLevel],
-                      0.0,
-                      newSelected);
+                current.value + values[nextLevel],
+                current.weight + weights[nextLevel],
+                0.0,
+                newSelected);
             child.bound = calculateBound(child, n, capacity, weights, values);
 
-            if (child.bound > result.maxValue) {
+            if (child.bound > static_cast<double>(result.maxValue)) {
                 pq.push(child);
             }
         }
@@ -164,13 +168,14 @@ Result solveKnapsackBranchAndBound(int capacity, const vector<int>& weights, con
     return result;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     // Use fast I/O
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
     // Read input from stdin
-    int n, capacity;
+    int n;
+    int64 capacity;
     cin >> n >> capacity;
 
     vector<int> weights(n);
