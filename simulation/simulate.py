@@ -4,6 +4,7 @@ Knapsack Algorithm Simulation and Analysis
 Runs various knapsack algorithms and generates comprehensive visualisations
 """
 
+import asyncio
 import ast
 import logging
 import platform
@@ -15,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
 
@@ -81,6 +83,11 @@ class KnapsackSimulator:
                 "name": "Random Permutation",
                 "sort_key": lambda n, w: (n**1.5) * w,
             },
+            "efficientalgo": {
+                "executable": self.algorithms_path / "bin" / "efficientalgo",
+                "name": "Efficient Algorithm",
+                "sort_key": lambda n, w: n,  # n * np.log(n),
+            },
             "billionscale": {
                 "executable": self.algorithms_path / "bin" / "billionscale",
                 "name": "Billion Scale",
@@ -100,41 +107,54 @@ class KnapsackSimulator:
         # Base timeout (seconds) used as part of adaptive timeout calculation
         self.base_timeout_seconds = 10.0
         # Memory limit for subprocesses in GB. Set to None to disable.
-        self.memory_limit_gb = 40
+        self.memory_limit_gb = 42.0
 
     def parse_list_string(self, s):
         """Parse string representation of list to actual list"""
-        return ast.literal_eval(s)
+        try:
+            return ast.literal_eval(s)
+        except (ValueError, SyntaxError) as e:
+            logger.error(f"Failed to parse list string: {s}, error: {e}")
+            return []
 
-    def load_dataset(self, dataset_name="knapsack_dataset.csv", category="Tiny"):
-        """Load knapsack dataset and filter by category"""
-        csv_path = self.data_path / dataset_name
-        if not csv_path.exists():
-            logger.error(f"Dataset file not found: {csv_path}")
-            return None, 0
+    def _validate_inputs(self, algo_name, weights, values):
+        """Validate algorithm inputs"""
+        if not weights or not values:
+            logger.error(f"Empty weights or values for {algo_name}")
+            return False
+        if len(weights) != len(values):
+            logger.error(f"Weights and values length mismatch for {algo_name}")
+            return False
+        return True
 
-        df = pd.read_csv(csv_path)
-        total_rows = len(df)
+    def _log_multiline_error(self, message, error_text):
+        """Helper to log multi-line error messages"""
+        logger.error(message)
+        for line in error_text.split("\n"):
+            if line.strip():
+                logger.error(f"\t{line.strip()}")
 
-        # Filter by category
-        df_filtered = df[df["category"] == category].copy()
+    def _prepare_input_data(self, n, capacity, weights, values):
+        """Prepare input data string for algorithm"""
+        input_data = f"{n} {capacity}\n"
+        input_data += " ".join(map(str, weights)) + "\n"
+        input_data += " ".join(map(str, values)) + "\n"
+        return input_data
 
-        # Parse list columns
-        df_filtered["weights"] = df_filtered["weights"].apply(self.parse_list_string)
-        df_filtered["prices"] = df_filtered["prices"].apply(self.parse_list_string)
+    def _calculate_timeout(self, n, custom_timeout=None):
+        """Calculate adaptive timeout based on problem size"""
+        per_item = 0.5  # seconds per item (heuristic)
+        timeout_seconds = min(
+            120.0, max(2.0, self.base_timeout_seconds + per_item * float(n))
+        )
+        if custom_timeout is not None:
+            timeout_seconds = float(custom_timeout)
+        return timeout_seconds
 
-        return df_filtered, total_rows
-
-    def run_algorithm(
-        self, algo_name, n, capacity, weights, values, custom_timeout=None
-    ):
-        """Run a specific algorithm with given inputs"""
-        if algo_name not in self.algorithms:
-            raise ValueError(f"Algorithm {algo_name} not found")
-
+    def _get_executable_path(self, algo_name):
+        """Get the executable path for an algorithm, handling Windows .exe extension"""
         executable = self.algorithms[algo_name]["executable"]
 
-        # Handle Windows .exe extension
         if platform.system() == "Windows" and not executable.exists():
             exe_path = executable.with_suffix(".exe")
             if exe_path.exists():
@@ -143,51 +163,156 @@ class KnapsackSimulator:
         if not executable.exists():
             raise FileNotFoundError(f"Executable not found: {executable}")
 
-        # Prepare input
-        input_data = f"{n} {capacity}\n"
-        input_data += " ".join(map(str, weights)) + "\n"
-        input_data += " ".join(map(str, values)) + "\n"
+        return executable
 
-        # Determine an adaptive timeout based on problem size n.
-        # Heuristic: base + (per_item * n), capped to a reasonable maximum.
-        per_item = 0.5  # seconds per item (heuristic)
-        timeout_seconds = min(
-            120.0, max(2.0, self.base_timeout_seconds + per_item * float(n))
-        )
-        # Custom: override if provided
-        if custom_timeout is not None:
-            timeout_seconds = custom_timeout
+    def _build_command(self, executable):
+        """Build command for execution, handling Windows+WSL compatibility"""
+        if platform.system() == "Windows" and shutil.which("wsl"):
+            path_str = str(executable).replace("\\", "/")
+            m = re.match(r"^([A-Za-z]):(.*)$", path_str)
+            if m:
+                drive = m.group(1).lower()
+                rest = m.group(2)
+                wsl_path = f"/mnt/{drive}{rest}"
+            else:
+                wsl_path = path_str
+            return ["wsl", wsl_path]
+        return [str(executable)]
+
+    def _get_resource_limiter(self, memory_divisor=1):
+        """Get resource limiting function for Unix systems"""
+        if platform.system() == "Windows" or self.memory_limit_gb is None:
+            return None
 
         try:
-            # Resource limiting for the child process (Unix-only)
-            if platform.system() != "Windows" and self.memory_limit_gb is not None:
-                import resource
+            import resource
 
-                def limit_resources():
-                    # Set max virtual memory
-                    mem_bytes = self.memory_limit_gb * 1024 * 1024 * 1024
-                    resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+            def limit_resources():
+                mem_bytes = int(
+                    (self.memory_limit_gb * 1024 * 1024 * 1024) / memory_divisor
+                )
+                resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+
+            return limit_resources
+        except ImportError:
+            logger.warning("resource module not available, memory limiting disabled")
+            return None
+
+    def _parse_algorithm_output(self, output_str, algo_name, elapsed_us):
+        """Parse algorithm output into structured result"""
+        if not output_str:
+            logger.warning(f"No output from {algo_name}")
+            return None
+
+        lines = output_str.strip().split("\n")
+
+        try:
+            max_value = int(lines[0].strip())
+        except (ValueError, IndexError) as e:
+            logger.error(f"Unexpected output format from {algo_name}: {e}")
+            return None
+
+        # Parse optional fields with defaults
+        num_selected = 0
+        selected_items = []
+        execution_time = elapsed_us
+        memory_used = 0
+
+        if len(lines) > 1:
+            try:
+                num_selected = int(lines[1].strip())
+            except (ValueError, IndexError):
+                pass
+
+        if num_selected > 0 and len(lines) > 2:
+            try:
+                selected_items = list(map(int, lines[2].split()))
+            except (ValueError, IndexError):
+                pass
+
+        if len(lines) > 3:
+            try:
+                execution_time = int(lines[3])
+            except (ValueError, IndexError):
+                pass
+
+        if len(lines) > 4:
+            try:
+                memory_used = int(lines[4])
+            except (ValueError, IndexError):
+                pass
+
+        return {
+            "max_value": max_value,
+            "selected_items": selected_items,
+            "execution_time": execution_time,
+            "memory_used": memory_used,
+            "success": True,
+        }
+
+    def load_dataset(self, dataset_name="knapsack_dataset.csv", category="Tiny"):
+        """Load knapsack dataset and filter by category"""
+        csv_path = self.data_path / dataset_name
+        if not csv_path.exists():
+            logger.error(f"Dataset file not found: {csv_path}")
+            return None, 0
+
+        try:
+            df = pd.read_csv(csv_path)
+        except Exception as e:
+            logger.error(f"Failed to read CSV file: {e}")
+            return None, 0
+
+        total_rows = len(df)
+
+        # Filter by category
+        df_filtered = df[df["category"] == category].copy()
+
+        if df_filtered.empty:
+            logger.warning(f"No data found for category: {category}")
+            return df_filtered, total_rows
+
+        # Parse list columns with error handling
+        for col in ["weights", "prices"]:
+            if col in df_filtered.columns:
+                df_filtered[col] = df_filtered[col].apply(self.parse_list_string)
             else:
+                logger.error(f"Column '{col}' not found in dataset")
+                return None, 0
 
-                def limit_resources():
-                    pass
+        return df_filtered, total_rows
 
-            # Build the command. On Windows, prefer running via WSL when executable is a *nix binary.
-            if platform.system() == "Windows" and shutil.which("wsl"):
-                # Try to convert Windows path to a WSL-compatible path.
-                path_str = str(executable).replace("\\", "/")
-                m = re.match(r"^([A-Za-z]):(.*)$", path_str)
-                if m:
-                    drive = m.group(1).lower()
-                    rest = m.group(2)
-                    wsl_path = f"/mnt/{drive}{rest}"
-                else:
-                    wsl_path = path_str
-                cmd = ["wsl", wsl_path]
-            else:
-                cmd = [str(executable)]
+    def run_algorithm(
+        self,
+        algo_name,
+        n,
+        capacity,
+        weights,
+        values,
+        custom_timeout=None,
+        memory_divisor=1,
+    ):
+        """Run a specific algorithm with given inputs"""
+        if algo_name not in self.algorithms:
+            raise ValueError(f"Algorithm {algo_name} not found")
 
-            # Run and measure real elapsed time as a fallback if the executable doesn't print time.
+        # Validate inputs
+        if not self._validate_inputs(algo_name, weights, values):
+            return None
+
+        # Get executable and build command
+        executable = self._get_executable_path(algo_name)
+        cmd = self._build_command(executable)
+
+        # Prepare input and timeout
+        input_data = self._prepare_input_data(n, capacity, weights, values)
+        timeout_seconds = self._calculate_timeout(n, custom_timeout)
+
+        # Get resource limiter if applicable
+        preexec_fn = self._get_resource_limiter(memory_divisor)
+
+        try:
+            # Run and measure real elapsed time
             start = time.perf_counter()
             result = subprocess.run(
                 cmd,
@@ -195,99 +320,181 @@ class KnapsackSimulator:
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,
-                preexec_fn=limit_resources,
+                preexec_fn=preexec_fn,
             )
             end = time.perf_counter()
             elapsed_us = int((end - start) * 1_000_000)
 
             if result.returncode != 0:
-                # Print stderr for diagnostics and return failure for this run.
-                logger.error(f"Error running {algo_name}: {result.stderr.strip()}")
+                self._log_multiline_error(f"Error running {algo_name}:", result.stderr)
                 return None
 
-            # Parse output safely. Expecting at least two lines (value and count), extras optional.
-            out = result.stdout.strip()
-            if not out:
-                logger.warning(f"No output from {algo_name}")
-                return None
+            # Parse and return output
+            return self._parse_algorithm_output(result.stdout, algo_name, elapsed_us)
 
-            lines = out.split("\n")
-            try:
-                max_value = int(lines[0].strip())
-            except Exception:
-                logger.error(f"Unexpected output format from {algo_name}: {lines[:5]}")
-                return None
-
-            # selected count
-            num_selected = 0
-            selected_items = []
-            if len(lines) > 1:
-                try:
-                    num_selected = int(lines[1].strip())
-                except Exception:
-                    # If second line isn't the count, ignore and try to parse items if present.
-                    num_selected = 0
-
-            if num_selected > 0 and len(lines) > 2:
-                try:
-                    selected_items = list(map(int, lines[2].split()))
-                except Exception:
-                    selected_items = []
-
-            # Try to parse execution_time and memory if provided by the program; otherwise use measured
-            execution_time = None
-            memory_used = None
-            if len(lines) > 3:
-                try:
-                    execution_time = int(lines[3])
-                except Exception:
-                    execution_time = None
-            if len(lines) > 4:
-                try:
-                    memory_used = int(lines[4])
-                except Exception:
-                    memory_used = None
-
-            if execution_time is None:
-                execution_time = elapsed_us
-
-            return {
-                "max_value": max_value,
-                "selected_items": selected_items,
-                "execution_time": execution_time,  # microseconds
-                "memory_used": memory_used or 0,  # bytes
-                "success": True,
-            }
         except subprocess.TimeoutExpired:
             logger.warning(f"Algorithm {algo_name} timed out (>{timeout_seconds:.1f}s)")
             return None
         except Exception as e:
-            logger.error(f"Error running {algo_name}: {str(e)}")
+            self._log_multiline_error(f"Error running {algo_name}:", str(e))
             return None
 
-    def simulate_all(self, dataset_name, category, custom_timeout=None):
+    async def run_algorithm_async(
+        self,
+        algo_name,
+        n,
+        capacity,
+        weights,
+        values,
+        custom_timeout=None,
+        memory_divisor=1,
+    ):
+        """Run a specific algorithm asynchronously with given inputs"""
+        if algo_name not in self.algorithms:
+            raise ValueError(f"Algorithm {algo_name} not found")
+
+        # Validate inputs
+        if not self._validate_inputs(algo_name, weights, values):
+            return None
+
+        # Get executable and build command
+        executable = self._get_executable_path(algo_name)
+        cmd = self._build_command(executable)
+
+        # Prepare input and timeout
+        input_data = self._prepare_input_data(n, capacity, weights, values)
+        timeout_seconds = self._calculate_timeout(n, custom_timeout)
+
+        # Get resource limiter if applicable
+        preexec_fn = self._get_resource_limiter(memory_divisor)
+
+        proc = None
+        try:
+            start = time.perf_counter()
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                preexec_fn=preexec_fn,
+            )
+
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(input_data.encode()), timeout=timeout_seconds
+                )
+                end = time.perf_counter()
+                elapsed_us = int((end - start) * 1_000_000)
+
+                if proc.returncode != 0:
+                    self._log_multiline_error(
+                        f"Error running {algo_name}:", stderr.decode()
+                    )
+                    return None
+
+                # Parse and return output
+                return self._parse_algorithm_output(
+                    stdout.decode(), algo_name, elapsed_us
+                )
+
+            except asyncio.TimeoutError:
+                await self._cleanup_process(proc)
+                logger.warning(
+                    f"Algorithm {algo_name} timed out (>{timeout_seconds:.1f}s)"
+                )
+                return None
+        except Exception as e:
+            await self._cleanup_process(proc)
+            self._log_multiline_error(f"Error running {algo_name}:", str(e))
+            return None
+        finally:
+            # Ensure process is properly cleaned up
+            await self._cleanup_process(proc)
+
+    async def _cleanup_process(self, proc):
+        """Clean up an async subprocess"""
+        if proc and proc.returncode is None:
+            try:
+                proc.terminate()
+                await asyncio.wait_for(proc.wait(), timeout=0.5)
+            except (ProcessLookupError, asyncio.TimeoutError):
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except ProcessLookupError:
+                    pass
+
+    def _initialize_results_dataframe(self, df):
+        """Initialize results dataframe with all necessary columns"""
+        results_df = df.copy()
+
+        # Batch initialize numeric columns with numpy for better performance
+        numeric_columns = []
+        for algo_name in self.algorithms:
+            numeric_columns.extend(
+                [
+                    f"{algo_name}_value",
+                    f"{algo_name}_time",
+                    f"{algo_name}_memory",
+                    f"{algo_name}_accuracy",
+                ]
+            )
+
+        # Initialize all numeric columns at once
+        results_df[numeric_columns] = np.nan
+
+        # Initialize object and boolean columns
+        for algo_name in self.algorithms:
+            results_df[f"{algo_name}_items"] = pd.Series(
+                [None] * len(results_df), index=results_df.index, dtype=object
+            )
+            results_df[f"{algo_name}_optimal"] = False
+
+        return results_df
+
+    def _cleanup_event_loop(self, loop):
+        """Properly cleanup an event loop"""
+        try:
+            # Cancel all pending tasks
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            # Wait for all tasks to complete with a timeout
+            if pending:
+                loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
+        except Exception:
+            pass
+        finally:
+            loop.close()
+
+    def simulate_all(self, dataset_name, category, max_parallel, custom_timeout=None):
         """Run all algorithms on the dataset"""
         logger.info(f"Loading {category} dataset from {dataset_name}...")
         df, _ = self.load_dataset(dataset_name, category)
-        if df is None:
+        if df is None or df.empty:
+            logger.error(f"No valid data for category {category}")
             return None
 
         logger.info(f"Found {len(df)} test cases.")
 
-        # Start with the original dataframe and add result columns
-        results_df = df.copy()
-        for algo_name in self.algorithms:
-            results_df[f"{algo_name}_value"] = pd.NA
-            results_df[f"{algo_name}_time"] = pd.NA
-            results_df[f"{algo_name}_memory"] = pd.NA
-            results_df[f"{algo_name}_items"] = pd.Series(
-                [None] * len(results_df), index=results_df.index, dtype=object
-            )
-            results_df[f"{algo_name}_accuracy"] = pd.NA
-            results_df[f"{algo_name}_optimal"] = False
+        # Set parallel tasks for this run
+        self.max_parallel_tasks = max_parallel
+
+        # Initialize results dataframe with all necessary columns
+        results_df = self._initialize_results_dataframe(df)
 
         # Pre-calculate the run order for each algorithm
         run_orders = self._prepare_run_order(df)
+
+        # Calculate memory divisor for parallel execution
+        memory_divisor = max(1, max_parallel)  # Ensure at least 1
+        if self.memory_limit_gb:
+            logger.info(
+                f"Parallel execution: {max_parallel} tasks, "
+                f"memory limit per task: {self.memory_limit_gb / memory_divisor:.2f}GB"
+            )
 
         # Run each algorithm independently
         for algo_name, sorted_indices in run_orders.items():
@@ -296,58 +503,28 @@ class KnapsackSimulator:
             logger.info(f"Running Algorithm: {algo_display_name}")
             logger.info("=" * 60)
 
-            consecutive_failures = 0
-            for test_count, idx in enumerate(sorted_indices, 1):
-                if consecutive_failures >= 3:
-                    logger.critical(
-                        f"*** Algorithm {algo_display_name} discontinued after 3 consecutive failures. ***"
+            # Run with parallel execution
+            try:
+                # Create a new event loop for each algorithm run to avoid cleanup issues
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(
+                        self._run_algorithm_parallel(
+                            algo_name,
+                            sorted_indices,
+                            df,
+                            results_df,
+                            custom_timeout,
+                            memory_divisor,
+                            max_parallel,
+                        )
                     )
-                    logger.info(
-                        f"Skipping remaining {len(sorted_indices) - test_count + 1} test cases."
-                    )
-                    break
-
-                row = df.loc[idx]
-                logger.info(
-                    f"Test {test_count}/{len(sorted_indices)}: test_id={idx}, n={row['n']}, capacity={row['capacity']}"
-                )
-
-                result = self.run_algorithm(
-                    algo_name,
-                    row["n"],
-                    row["capacity"],
-                    row["weights"],
-                    row["prices"],
-                    custom_timeout,
-                )
-
-                if result:
-                    consecutive_failures = 0
-                    accuracy = (
-                        100.0
-                        if row["best_price"] == 0 and result["max_value"] == 0
-                        else (result["max_value"] / row["best_price"] * 100.0)
-                        if row["best_price"] > 0
-                        else 0.0
-                    )
-                    is_optimal = result["max_value"] == row["best_price"]
-
-                    results_df.at[idx, f"{algo_name}_value"] = result["max_value"]
-                    results_df.at[idx, f"{algo_name}_time"] = result["execution_time"]
-                    results_df.at[idx, f"{algo_name}_memory"] = result["memory_used"]
-                    results_df.at[idx, f"{algo_name}_items"] = result["selected_items"]
-                    results_df.at[idx, f"{algo_name}_accuracy"] = accuracy
-                    results_df.at[idx, f"{algo_name}_optimal"] = is_optimal
-
-                    logger.info(
-                        f"  -> Value: {result['max_value']}, Time: {result['execution_time']}μs, Accuracy: {accuracy:.2f}%, Optimal: {is_optimal}"
-                    )
-                else:
-                    consecutive_failures += 1
-                    logger.warning(
-                        f"  -> FAILED (consecutive failures: {consecutive_failures})"
-                    )
-                    # Values are already NA/False, so no need to set them again
+                finally:
+                    self._cleanup_event_loop(loop)
+            except Exception as e:
+                logger.error(f"Failed to run {algo_display_name}: {e}")
+                continue
 
         # Save results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -692,20 +869,166 @@ class KnapsackSimulator:
     def _prepare_run_order(self, df):
         """Pre-calculates the run order for all algorithms."""
         run_orders = {}
+        # Work on a copy to avoid modifying original
+        df_temp = df.copy()
+
         for algo_name, config in self.algorithms.items():
             complexity_col = f"{algo_name}_complexity"
 
-            df[complexity_col] = df.apply(
+            # Vectorised operation for better performance
+            df_temp[complexity_col] = df_temp.apply(
                 lambda row: config["sort_key"](row["n"], row["capacity"]), axis=1
             )
 
             # Store sorted indices
-            run_orders[algo_name] = df.sort_values(
+            run_orders[algo_name] = df_temp.sort_values(
                 by=complexity_col, ascending=True
             ).index.tolist()
-            # Drop the complexity column to keep the DataFrame clean
-            df.drop(columns=[complexity_col], inplace=True)
+
         return run_orders
+
+    async def _run_algorithm_parallel(
+        self,
+        algo_name,
+        sorted_indices,
+        df,
+        results_df,
+        custom_timeout,
+        memory_divisor,
+        max_parallel,
+    ):
+        """Run algorithm tests in parallel with batching and failure tracking"""
+        algo_display_name = self.algorithms[algo_name]["name"]
+        semaphore = asyncio.Semaphore(max_parallel)
+
+        total_tests = len(sorted_indices)
+        consecutive_failures = 0
+        consecutive_failures_lock = asyncio.Lock()
+        test_count = 0
+        should_stop = False
+
+        async def run_single_test(idx, test_num):
+            nonlocal consecutive_failures, should_stop, test_count
+
+            # Check if we should stop before even starting
+            if should_stop:
+                return None
+
+            async with semaphore:
+                # Double-check after acquiring semaphore
+                if should_stop:
+                    return None
+
+                row = df.loc[idx]
+                logger.info(
+                    f"{test_num}/{total_tests}: test_id={idx}, n={row['n']}, capacity={row['capacity']}"
+                )
+
+                result = await self.run_algorithm_async(
+                    algo_name,
+                    row["n"],
+                    row["capacity"],
+                    row["weights"],
+                    row["prices"],
+                    custom_timeout,
+                    memory_divisor,
+                )
+
+                async with consecutive_failures_lock:
+                    if result:
+                        if row["best_price"] == 0:
+                            accuracy = 100.0 if result["max_value"] == 0 else 0.0
+                        else:
+                            accuracy = min(
+                                100.0, (result["max_value"] / row["best_price"] * 100.0)
+                            )
+
+                        is_optimal = abs(result["max_value"] - row["best_price"]) < 1e-9
+
+                        results_df.at[idx, f"{algo_name}_value"] = result["max_value"]
+                        results_df.at[idx, f"{algo_name}_time"] = result[
+                            "execution_time"
+                        ]
+                        results_df.at[idx, f"{algo_name}_memory"] = result[
+                            "memory_used"
+                        ]
+                        results_df.at[idx, f"{algo_name}_items"] = result[
+                            "selected_items"
+                        ]
+                        results_df.at[idx, f"{algo_name}_accuracy"] = accuracy
+                        results_df.at[idx, f"{algo_name}_optimal"] = is_optimal
+
+                        logger.info(
+                            f"  -> {test_num}/{total_tests} Value: {result['max_value']}, "
+                            f"Time: {result['execution_time']}μs, Accuracy: {accuracy:.2f}%, Optimal: {is_optimal}"
+                        )
+                        consecutive_failures = 0
+                        return True
+                    else:
+                        logger.warning(
+                            f"  -> {test_num}/{total_tests} FAILED (test_id={idx})"
+                        )
+                        consecutive_failures += 1
+                        if consecutive_failures >= 3:
+                            should_stop = True
+                            logger.critical(
+                                f"*** Algorithm {algo_display_name} hit 3 consecutive failures - stopping ***"
+                            )
+                        return False
+
+        # Launch all tasks at once - semaphore controls concurrency
+        tasks = []
+        for i, idx in enumerate(sorted_indices):
+            if should_stop:
+                break
+            task = asyncio.create_task(run_single_test(idx, i + 1))
+            tasks.append(task)
+
+        # Process results as they complete
+        try:
+            for completed_task in asyncio.as_completed(tasks):
+                try:
+                    _ = await completed_task
+                    test_count += 1
+
+                    # If we should stop, cancel all remaining tasks
+                    if should_stop:
+                        cancelled_count = 0
+                        for task in tasks:
+                            if not task.done():
+                                task.cancel()
+                                cancelled_count += 1
+
+                        if cancelled_count > 0:
+                            logger.info(f"Cancelled {cancelled_count} pending tasks")
+
+                        # Wait for cancellations to complete with timeout
+                        try:
+                            await asyncio.wait_for(
+                                asyncio.gather(*tasks, return_exceptions=True),
+                                timeout=5.0,
+                            )
+                        except asyncio.TimeoutError:
+                            logger.warning("Some tasks did not cancel cleanly")
+
+                        logger.info(
+                            f"Skipping remaining {total_tests - test_count} test cases."
+                        )
+                        break
+
+                except asyncio.CancelledError:
+                    continue
+                except Exception as e:
+                    logger.error(f"Exception in test: {e}")
+                    async with consecutive_failures_lock:
+                        consecutive_failures += 1
+                        if consecutive_failures >= 3:
+                            should_stop = True
+        finally:
+            # Ensure all tasks are complete
+            await asyncio.gather(*tasks, return_exceptions=True)
+            # Give a small delay to allow subprocess cleanup
+            await asyncio.sleep(0.1)
 
 
 def main():
@@ -730,23 +1053,23 @@ def main():
     logger.info("=" * 60)
 
     # --- Define the simulation runs here ---
-    # Format: [dataset_name, category, optional_timeout_in_seconds]
+    # Format: [dataset_name, category, max_parallel_tasks, optional_timeout_in_seconds]
     simulation_runs = [
         # -- Default --
-        ["knapsack_dataset.csv", "Tiny"],
+        ["knapsack_dataset.csv", "Tiny", 1],
         # -- Easy --
-        # ["knapsack_easy_dataset_l012_400.csv", "ETiny", 4],
-        # ["knapsack_easy_dataset_l012_400.csv", "ESmall", 8],
-        # ["knapsack_easy_dataset_l012_400.csv", "EMedium", 12],
-        # ["knapsack_easy_dataset_l3_40.csv", "ELarge", 300],
-        # # -- Trap --
-        # ["knapsack_trap_dataset_l012_400.csv", "TTiny", 4],
-        # ["knapsack_trap_dataset_l012_400.csv", "TSmall", 8],
-        # ["knapsack_trap_dataset_l012_400.csv", "TMedium", 12],
-        # ["knapsack_trap_dataset_l3_40.csv", "TLarge", 300],
+        # ["knapsack_easy_dataset_l012_400.csv", "ETiny", 12, 14],
+        # ["knapsack_easy_dataset_l012_400.csv", "ESmall", 8, 22],
+        # ["knapsack_easy_dataset_l012_400.csv", "EMedium", 4, 30],
+        # ["knapsack_easy_dataset_l3_40.csv", "ELarge", 3, 600],
+        # -- Trap --
+        # ["knapsack_trap_dataset_l012_400.csv", "TTiny", 12, 14],
+        # ["knapsack_trap_dataset_l012_400.csv", "TSmall", 8, 22],
+        # ["knapsack_trap_dataset_l012_400.csv", "TMedium", 4, 30],
+        # ["knapsack_trap_dataset_l3_40.csv", "TLarge", 3, 600],
         # -- Hard --
-        # ["knapsack_hard_dataset.csv", "known", 1],
-        # ["knapsack_hard_dataset.csv", "unknown", 8],
+        # ["knapsack_hard_dataset.csv", "known", 4, 8],
+        # ["knapsack_hard_dataset.csv", "unknown", 4, 8],
     ]
 
     # Create simulator
@@ -756,14 +1079,19 @@ def main():
         # Unpack config
         dataset_name = run_config[0]
         category = run_config[1]
-        timeout = run_config[2] if len(run_config) > 2 else None
+        max_parallel = run_config[2]
+        timeout = run_config[3] if len(run_config) > 3 else None
 
         logger.info(f"--- Running simulation for category: {category} ---")
+        logger.info(f"Parallel tasks: {max_parallel}")
         if timeout:
-            logger.info(f"Using hardcoded timeout: {timeout}s")
+            logger.info(f"Using timeout: {timeout}s")
 
         results_df = simulator.simulate_all(
-            dataset_name=dataset_name, category=category, custom_timeout=timeout
+            dataset_name=dataset_name,
+            category=category,
+            max_parallel=max_parallel,
+            custom_timeout=timeout,
         )
 
         # Create visualisations

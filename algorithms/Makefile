@@ -13,7 +13,7 @@ ALGO_DIRS = 01-bruteforce 02-memoization 03-dynamicprogramming 04-branchandbound
 # Explicit targets we currently build (following ALGO_DIRS order)
 TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming \
 	$(TARGET_DIR)/branchandbound $(TARGET_DIR)/meetinthemiddle $(TARGET_DIR)/greedyheuristic \
-	$(TARGET_DIR)/randompermutation $(TARGET_DIR)/billionscale \
+	$(TARGET_DIR)/randompermutation $(TARGET_DIR)/efficientalgo $(TARGET_DIR)/billionscale \
 	$(TARGET_DIR)/geneticalgorithm $(TARGET_DIR)/customalgorithm
 
 # Create bin directory if it doesn't exist
@@ -67,7 +67,11 @@ $(TARGET_DIR)/randompermutation: 07-randompremutation/randompermutation.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $<
 	@echo "Random Permutation compiled successfully!"
 
-# TODO: 08-efficientalgo
+# 08-efficientalgo
+$(TARGET_DIR)/efficientalgo: 08-efficientalgo/efficientalgo.cpp
+	@echo "Compiling Efficient Algorithm..."
+	$(CXX) $(CXXFLAGS) -o $@ $<
+	@echo "Efficient Algorithm compiled successfully!"
 
 # 09-billionscale
 $(TARGET_DIR)/billionscale: 09-billionscale/algo.cpp
@@ -95,6 +99,7 @@ branchandbound: $(TARGET_DIR)/branchandbound
 meetinthemiddle: $(TARGET_DIR)/meetinthemiddle
 greedyheuristic: $(TARGET_DIR)/greedyheuristic
 randompermutation: $(TARGET_DIR)/randompermutation
+efficientalgo: $(TARGET_DIR)/efficientalgo
 billionscale: $(TARGET_DIR)/billionscale
 geneticalgorithm: $(TARGET_DIR)/geneticalgorithm
 customalgorithm: $(TARGET_DIR)/customalgorithm
@@ -114,5 +119,5 @@ help:
 	@echo "  make help             - Display this help message"
 	@echo ""
 	@echo "Available algorithms: bruteforce, memoization, dynamicprogramming, branchandbound,"
-	@echo "                      meetinthemiddle, greedyheuristic, randompermutation,"
+	@echo "                      meetinthemiddle, greedyheuristic, randompermutation, efficientalgo,"
 	@echo "                      billionscale, geneticalgorithm, customalgorithm"
