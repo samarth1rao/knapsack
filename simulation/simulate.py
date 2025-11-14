@@ -107,7 +107,7 @@ class KnapsackSimulator:
         # Base timeout (seconds) used as part of adaptive timeout calculation
         self.base_timeout_seconds = 10.0
         # Memory limit for subprocesses in GB. Set to None to disable.
-        self.memory_limit_gb = 42.0
+        self.memory_limit_gb = None
 
     def parse_list_string(self, s):
         """Parse string representation of list to actual list"""
@@ -189,7 +189,7 @@ class KnapsackSimulator:
 
             def limit_resources():
                 mem_bytes = int(
-                    (self.memory_limit_gb * 1024 * 1024 * 1024) / memory_divisor
+                    (self.memory_limit_gb * 1024 * 1024 * 1024) / memory_divisor  # pyright: ignore[reportOptionalOperand]
                 )
                 resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
 
@@ -469,8 +469,18 @@ class KnapsackSimulator:
         finally:
             loop.close()
 
-    def simulate_all(self, dataset_name, category, max_parallel, custom_timeout=None):
+    def simulate_all(
+        self,
+        dataset_name,
+        category,
+        max_parallel,
+        custom_timeout=None,
+        memory_limit_gb=None,
+    ):
         """Run all algorithms on the dataset"""
+        # Set memory limit for this run
+        self.memory_limit_gb = memory_limit_gb
+
         logger.info(f"Loading {category} dataset from {dataset_name}...")
         df, _ = self.load_dataset(dataset_name, category)
         if df is None or df.empty:
@@ -902,13 +912,24 @@ class KnapsackSimulator:
         semaphore = asyncio.Semaphore(max_parallel)
 
         total_tests = len(sorted_indices)
-        consecutive_failures = 0
-        consecutive_failures_lock = asyncio.Lock()
+        failed_test_numbers = set()  # Track which test numbers have failed
+        failures_lock = asyncio.Lock()
         test_count = 0
         should_stop = False
 
+        def check_consecutive_failures(test_num):
+            """Check if there are 3 consecutive test numbers that failed"""
+            # Loop over all 3 windows
+            for i in [-1, 0, 1]:
+                # Generate the set of three consecutive test numbers and check if subset
+                if {test_num + j + i for j in [-1, 0, 1]} <= failed_test_numbers:
+                    # Return True if found
+                    return True
+            # No such window found
+            return False
+
         async def run_single_test(idx, test_num):
-            nonlocal consecutive_failures, should_stop, test_count
+            nonlocal should_stop, test_count
 
             # Check if we should stop before even starting
             if should_stop:
@@ -934,7 +955,7 @@ class KnapsackSimulator:
                     memory_divisor,
                 )
 
-                async with consecutive_failures_lock:
+                async with failures_lock:
                     if result:
                         if row["best_price"] == 0:
                             accuracy = 100.0 if result["max_value"] == 0 else 0.0
@@ -962,17 +983,19 @@ class KnapsackSimulator:
                             f"  -> {test_num}/{total_tests} Value: {result['max_value']}, "
                             f"Time: {result['execution_time']}μs, Accuracy: {accuracy:.2f}%, Optimal: {is_optimal}"
                         )
-                        consecutive_failures = 0
                         return True
                     else:
                         logger.warning(
                             f"  -> {test_num}/{total_tests} FAILED (test_id={idx})"
                         )
-                        consecutive_failures += 1
-                        if consecutive_failures >= 3:
+                        failed_test_numbers.add(test_num)
+
+                        # Check for 3 consecutive failures
+                        if check_consecutive_failures(test_num):
                             should_stop = True
                             logger.critical(
-                                f"*** Algorithm {algo_display_name} hit 3 consecutive failures - stopping ***"
+                                f"*** Algorithm {algo_display_name} hit 3 consecutive test failures "
+                                f"(failed tests: {sorted(failed_test_numbers)}) - stopping ***"
                             )
                         return False
 
@@ -1020,10 +1043,12 @@ class KnapsackSimulator:
                     continue
                 except Exception as e:
                     logger.error(f"Exception in test: {e}")
-                    async with consecutive_failures_lock:
-                        consecutive_failures += 1
-                        if consecutive_failures >= 3:
-                            should_stop = True
+                    # Exception counts as a failure - we don't know the test_num here
+                    # but we can still set should_stop if needed
+                    async with failures_lock:
+                        # Since we don't have the test_num in this exception handler,
+                        # we'll just log the error but not track it for consecutive failures
+                        pass
         finally:
             # Ensure all tasks are complete
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -1052,11 +1077,15 @@ def main():
     logger.info("Knapsack Algorithm Simulation")
     logger.info("=" * 60)
 
-    # --- Define the simulation runs here ---
-    # Format: [dataset_name, category, max_parallel_tasks, optional_timeout_in_seconds]
+    # --- DEFINE: memory limit here (in GB, set to None to disable) ---
+    memory_limit_gb = 42.0
+
+    # --- DEFINE: simulation runs here ---
+    # Format: [dataset_name, category, max_parallel_tasks, timeout_seconds (optional)]
+    # Note: memory limit will be split among parallel tasks
     simulation_runs = [
         # -- Default --
-        ["knapsack_dataset.csv", "Tiny", 1],
+        ["knapsack_easy_dataset.csv", "Tiny", 1],
         # -- Easy --
         # ["knapsack_easy_dataset_l012_400.csv", "ETiny", 12, 14],
         # ["knapsack_easy_dataset_l012_400.csv", "ESmall", 8, 22],
@@ -1067,9 +1096,13 @@ def main():
         # ["knapsack_trap_dataset_l012_400.csv", "TSmall", 8, 22],
         # ["knapsack_trap_dataset_l012_400.csv", "TMedium", 4, 30],
         # ["knapsack_trap_dataset_l3_40.csv", "TLarge", 3, 600],
-        # -- Hard --
-        # ["knapsack_hard_dataset.csv", "known", 4, 8],
-        # ["knapsack_hard_dataset.csv", "unknown", 4, 8],
+        # -- Hard1 --
+        # ["knapsack_hard1_dataset.csv", "H1known", 4, 8],
+        # ["knapsack_hard1_dataset.csv", "H1unknown", 4, 8],
+        # -- Hard2 --
+        # ["knapsack_hard2_dataset.csv", "H2xiang", 12, 14],
+        # ["knapsack_hard2_dataset.csv", "H2pisingerlowdim", 12, 14],
+        # ["knapsack_hard2_dataset.csv", "H2pisingerlarge", 8, 22],
     ]
 
     # Create simulator
@@ -1092,6 +1125,7 @@ def main():
             category=category,
             max_parallel=max_parallel,
             custom_timeout=timeout,
+            memory_limit_gb=memory_limit_gb,
         )
 
         # Create visualisations

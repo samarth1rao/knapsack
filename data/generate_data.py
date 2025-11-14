@@ -24,7 +24,7 @@ The C++ worker's role:
 3.  Append that single instance as a row to the CSV.
 
 Command-line arguments (all provided as --arg value):
-    --mode    : problem mode - "easy" or "trap" (default: trap)
+    --mode    : problem mode - "easy" or "trap" (default: easy)
     --out     : output CSV path (default: knapsack_easy_dataset.csv or knapsack_trap_dataset.csv resp.)
     --total   : total number of problems to generate (default: 100)
     --level   : maximum difficulty level to include (default: 2)
@@ -40,11 +40,11 @@ from __future__ import annotations
 
 import argparse
 import math
-import os
 import random
 import gc
 import subprocess
 import sys
+from pathlib import Path
 from typing import Dict, List, Optional
 
 
@@ -127,19 +127,16 @@ def build_n_list(
     return result
 
 
-def compile_cpp_worker(cpp_src: str, cpp_exe: str) -> bool:
+def compile_cpp_worker(cpp_src: Path, cpp_exe: Path) -> bool:
     """Compile the C++ worker if it's missing or outdated."""
     # Ensure bin directory exists
-    bin_dir = os.path.dirname(cpp_exe)
-    if bin_dir:
-        os.makedirs(bin_dir, exist_ok=True)
+    cpp_exe.parent.mkdir(parents=True, exist_ok=True)
 
-    if not os.path.exists(cpp_exe) or (
-        os.path.exists(cpp_src)
-        and os.path.getmtime(cpp_src) > os.path.getmtime(cpp_exe)
+    if not cpp_exe.exists() or (
+        cpp_src.exists() and cpp_src.stat().st_mtime > cpp_exe.stat().st_mtime
     ):
         print(f"Compiling C++ worker: {cpp_src} -> {cpp_exe}")
-        compile_cmd = ["g++", "-O3", "-std=c++17", cpp_src, "-o", cpp_exe]
+        compile_cmd = ["g++", "-O3", "-std=c++17", str(cpp_src), "-o", str(cpp_exe)]
 
         try:
             subprocess.run(compile_cmd, check=True, capture_output=True, text=True)
@@ -167,8 +164,8 @@ def main():
     parser.add_argument(
         "--mode",
         choices=["easy", "trap"],
-        default="trap",
-        help="Problem mode: 'easy' or 'trap' (default: trap)",
+        default="easy",
+        help="Problem mode: 'easy' or 'trap' (default: easy)",
     )
     parser.add_argument(
         "--out",
@@ -193,37 +190,42 @@ def main():
 
     # Set default output path based on mode if not specified
     if args.out is None:
-        if args.mode == "trap":
-            args.out = os.path.join(
-                os.path.dirname(__file__), "knapsack_trap_dataset.csv"
-            )
+        script_dir = Path(__file__).parent
+        if args.mode == "easy":
+            args.out = script_dir / "knapsack_easy_dataset.csv"
+        elif args.mode == "trap":
+            args.out = script_dir / "knapsack_trap_dataset.csv"
         else:
-            args.out = os.path.join(
-                os.path.dirname(__file__), "knapsack_easy_dataset.csv"
-            )
+            print(f"Error: Unknown mode '{args.mode}'", file=sys.stderr)
+            sys.exit(1)
+    else:
+        args.out = Path(args.out)
 
     # --- 1. Compile C++ Worker ---
-    if args.mode == "trap":
+    if args.mode == "easy":
+        cpp_src_file = "generate_easy_instance.cpp"
+        cpp_exe_file = "generate_easy_instance"
+    elif args.mode == "trap":
         cpp_src_file = "generate_trap_instance.cpp"
         cpp_exe_file = "generate_trap_instance"
     else:
-        cpp_src_file = "generate_easy_instance.cpp"
-        cpp_exe_file = "generate_easy_instance"
+        print(f"Error: Unknown mode '{args.mode}'", file=sys.stderr)
+        sys.exit(1)
 
     if sys.platform == "win32":
         cpp_exe_file += ".exe"
 
-    script_dir = os.path.dirname(__file__)
-    cpp_src_path = os.path.join(script_dir, cpp_src_file)
-    if not os.path.exists(cpp_src_path):
+    script_dir = Path(__file__).parent
+    cpp_src_path = script_dir / cpp_src_file
+    if not cpp_src_path.exists():
         print(
             f"Error: C++ source file '{cpp_src_file}' not found in the same directory.",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    bin_dir = os.path.join(script_dir, "bin")
-    cpp_exe_path = os.path.join(bin_dir, cpp_exe_file)
+    bin_dir = script_dir / "bin"
+    cpp_exe_path = bin_dir / cpp_exe_file
     if not compile_cpp_worker(cpp_src_path, cpp_exe_path):
         sys.exit(1)
 
@@ -234,7 +236,7 @@ def main():
         print("No problems to generate. Exiting.")
         return
 
-    # --- 3. Initialize CSV File and Header ---
+    # --- 3. Initialise CSV File and Header ---
     fields = [
         "category",
         "n",
@@ -247,13 +249,11 @@ def main():
     ]
 
     # Ensure output directory exists
-    output_dir = os.path.dirname(args.out)
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        if os.path.exists(args.out):
-            os.remove(args.out)
+        if args.out.exists():
+            args.out.unlink()
 
         with open(args.out, "w", newline="", encoding="utf-8") as f:
             f.write(",".join(fields) + "\n")
@@ -270,6 +270,9 @@ def main():
         seed = rng.randint(0, 2**31 - 1)
 
         # Build command based on mode
+        if args.mode == "easy":
+            # Easy mode does not require capacity
+            cmd = [str(cpp_exe_path), str(args.out), cat, str(n), str(seed)]
         if args.mode == "trap":
             capacity = 0
             # Trap mode requires capacity parameter
@@ -283,10 +286,17 @@ def main():
                 capacity = 100_000_000
             elif cat == "Massive":
                 capacity = 1_000_000_000
-            cmd = [cpp_exe_path, args.out, cat, str(n), str(capacity), str(seed)]
+            cmd = [
+                str(cpp_exe_path),
+                str(args.out),
+                cat,
+                str(n),
+                str(capacity),
+                str(seed),
+            ]
         else:
-            # Easy mode does not require capacity
-            cmd = [cpp_exe_path, args.out, cat, str(n), str(seed)]
+            print(f"Error: Unknown mode '{args.mode}'", file=sys.stderr)
+            sys.exit(1)
 
         try:
             # We don't need to capture output, just check for errors
