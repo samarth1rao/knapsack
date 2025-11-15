@@ -1077,10 +1077,10 @@ def main():
     logger.info("Knapsack Algorithm Simulation")
     logger.info("=" * 60)
 
-    # --- DEFINE: memory limit here (in GB, set to None to disable) ---
-    memory_limit_gb = 42.0
+    # --- DEFINE: memory limit (in GB, set to None to disable) ---
+    memory_limit_gb = 48.0
 
-    # --- DEFINE: simulation runs here ---
+    # --- DEFINE: simulation runs ---
     # Format: [dataset_name, category, max_parallel_tasks, timeout_seconds (optional)]
     # Note: memory limit will be split among parallel tasks
     simulation_runs = [
@@ -1088,17 +1088,17 @@ def main():
         ["knapsack_easy_dataset.csv", "Tiny", 1],
         # -- Easy --
         # ["knapsack_easy_dataset_l012_400.csv", "ETiny", 12, 14],
-        # ["knapsack_easy_dataset_l012_400.csv", "ESmall", 8, 22],
-        # ["knapsack_easy_dataset_l012_400.csv", "EMedium", 4, 30],
-        # ["knapsack_easy_dataset_l3_40.csv", "ELarge", 3, 600],
+        # ["knapsack_easy_dataset_l012_400.csv", "ESmall", 12, 22],
+        # ["knapsack_easy_dataset_l012_400.csv", "EMedium", 8, 30],
+        # ["knapsack_easy_dataset_l3_40.csv", "ELarge", 8, 600],
         # -- Trap --
         # ["knapsack_trap_dataset_l012_400.csv", "TTiny", 12, 14],
-        # ["knapsack_trap_dataset_l012_400.csv", "TSmall", 8, 22],
-        # ["knapsack_trap_dataset_l012_400.csv", "TMedium", 4, 30],
-        # ["knapsack_trap_dataset_l3_40.csv", "TLarge", 3, 600],
+        # ["knapsack_trap_dataset_l012_400.csv", "TSmall", 12, 22],
+        # ["knapsack_trap_dataset_l012_400.csv", "TMedium", 8, 30],
+        # ["knapsack_trap_dataset_l3_40.csv", "TLarge", 8, 600],
         # -- Hard1 --
-        # ["knapsack_hard1_dataset.csv", "H1known", 4, 8],
-        # ["knapsack_hard1_dataset.csv", "H1unknown", 4, 8],
+        # ["knapsack_hard1_dataset.csv", "H1known", 8, 8],
+        # ["knapsack_hard1_dataset.csv", "H1unknown", 8, 8],
         # -- Hard2 --
         # ["knapsack_hard2_dataset.csv", "H2xiang", 12, 14],
         # ["knapsack_hard2_dataset.csv", "H2pisingerlowdim", 12, 14],

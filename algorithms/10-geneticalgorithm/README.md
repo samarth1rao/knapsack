@@ -42,19 +42,19 @@ Instead of using fixed values, the `POPULATION_SIZE` and `MAX_GENERATIONS` are d
 #### Individual Operations
 
 | Function | Time Complexity | Space Complexity | Notes |
-|----------|----------------|------------------|-------|
+|----------|-----------------|------------------|-------|
 | `Individual::calculateMetrics()` | O(N) | O(1) | Iterates through all N items once |
 | `Individual::getFitness()` | O(1) | O(1) | Amortized constant time with caching |
-| `Individual::repair()` | O(N) | O(N) | Collects indices O(N), then removes (worst case all); uses helper vector |
+| `Individual::repair()` | O(N) | O(N) | Collects indices O(N), then removes items (worst case all); uses helper vector |
 
 #### Genetic Operators
 
 | Function | Time Complexity | Space Complexity | Notes |
-|----------|----------------|------------------|-------|
-| `generateInitialPopulation()` | O(P × N) | O(P × N) | Creates P individuals, each initialized and repaired |
+|----------|-----------------|------------------|-------|
+| `generateInitialPopulation()` | O(P × N) | O(P × N) | Creates P individuals, each initialised and repaired |
 | `selection()` | O(1) | O(1) | Tournament selection with 4 random individuals |
 | `crossover()` | O(N) | O(1) | Single-point crossover with metric recalculation |
-| `mutate()` | O(N) | O(1) | Iterates through all N bits, expected mutations: MUTATION_RATE × N |
+| `Individual::mutate()` | O(N) | O(1) | Iterates through all N bits, expected mutations: MUTATION_RATE × N |
 | `nextGeneration()` | O(P × N) | O(1) | Processes P individuals through selection, crossover/reproduction, mutation, and repair |
 
 #### Overall Algorithm
@@ -84,13 +84,13 @@ Where:
 The implementation uses adaptive hyperparameters to maintain practical efficiency:
 
 | N Range | P (Population) | G (Generations) | G × P | Effective Complexity |
-|---------|----------------|-----------------|-------|---------------------|
+|---------|----------------|-----------------|-------|----------------------|
 | N < 100 | 20 | 200 | 4,000 | O(4,000N) |
 | 100 ≤ N < 1,000 | 50 | 100 | 5,000 | O(5,000N) |
 | 1,000 ≤ N < 10,000 | 100 | 50 | 5,000 | O(5,000N) |
 | N ≥ 10,000 | 150 | 30 | 4,500 | O(4,500N) |
 
-By keeping the product G × P approximately constant as N grows, the algorithm achieves **pseudo-linear O(N) scaling** in practice for large problem instances. This is a key optimization that makes the GA feasible for large-scale knapsack problems where exact algorithms would be computationally prohibitive.
+By keeping the product G × P approximately constant as N grows, the algorithm achieves **pseudo-linear O(N) scaling** in practice for large problem instances. This is a key optimisation that makes the GA feasible for large-scale knapsack problems where exact algorithms would be computationally prohibitive.
 
 ## References
 
