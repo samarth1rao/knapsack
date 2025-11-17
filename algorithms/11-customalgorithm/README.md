@@ -95,4 +95,4 @@ By keeping the product G × P approximately constant as N grows, the algorithm a
 3. <https://github.com/arpitbbhayani/genetic-knapsack> - Python code for GA _(by Arpit Bhayani, linked in his blog)_
 4. <https://doi.org/10.47191/etj/v9i07.10> - `0-1 Knapsack Problem Solving using Genetic Optimization Algorithm`
 5. <https://doi.org/10.1145/3230905.3230907> - `A hybrid genetic algorithm for solving 0/1 Knapsack Problem`
-6. <https://doi.org/10.1109/ICACCCT.2014.7019272> - `Solving the 0-1 Knapsack Problem Using Genetic Algorithm and Rough Set Theory`
+7. <https://doi.org/10.1007/978-3-319-23485-4_31> - `Memetic Algorithm for Solving the 0-1 Multidimensional Knapsack Problem`
