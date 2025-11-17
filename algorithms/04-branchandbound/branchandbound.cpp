@@ -1,43 +1,46 @@
-#include<iostream>
-#include<vector>
-#include<algorithm>
-#include<chrono>
-#include<sys/resource.h>
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <chrono>
+#include <sys/resource.h>
+
 using namespace std;
+using int64 = long long;
 
 // --- Structures ---
 struct Item {
-    int id;        // Original index before sorting
+    size_t id;     // Original index before sorting
     double w;      // Weight
     double v;      // Value
     double r;      // Value-to-weight ratio
 };
 
 // --- Global Variables ---
-int n;                    // Number of items
-double cap;               // Knapsack capacity
-double maxP = 0;          // Maximum profit found so far
+size_t n;                 // Number of items
+int64 cap;                // Knapsack capacity
+int64 maxP = 0;           // Maximum profit found so far
 vector<Item> items;       // Items sorted by ratio (descending)
 vector<bool> best;        // Best solution found (indexed by original ID)
 vector<bool> curr;        // Current solution state during recursion (indexed by original ID)
 
 // --- Comparator for Sorting ---
 // Sort items by value-to-weight ratio in descending order
-bool cmpI(const Item& a, const Item& b) {
+bool cmpI(const Item &a, const Item &b) {
     return a.r > b.r;
 }
 
 // --- Upper Bound Calculation ---
 // Calculates the maximum possible value from index 'idx' onwards using fractional knapsack
 // This serves as an upper bound for pruning branches that cannot improve the current best solution
-double bound(int idx, double cw, double cv) {
-    double rc = cap - cw;           // Remaining capacity
-    double b = cv;                  // Start with current value
-    int j = idx;
+double bound(size_t idx, int64 cw, int64 cv) {
+    int64 rc = cap - cw;           // Remaining capacity
+    double b = cv;                 // Start with current value
+    size_t j = idx;
 
     // Greedily include full items in descending order of ratio
     while (j < n && items[j].w <= rc) {
-        rc -= items[j].w;
+        rc -= static_cast<int64>(items[j].w);
         b += items[j].v;
         j++;
     }
@@ -55,7 +58,7 @@ double bound(int idx, double cw, double cv) {
 //   - idx: current item being considered
 //   - cw: current total weight
 //   - cv: current total value
-void solve(int idx, double cw, double cv) {
+void solve(size_t idx, int64 cw, int64 cv) {
     // --- Update Best Solution ---
     // If current value exceeds maximum found, record this as the new best solution
     if (cv > maxP) {
@@ -76,9 +79,9 @@ void solve(int idx, double cw, double cv) {
 
     // --- Branch 1: INCLUDE Current Item ---
     // Try taking the current item if it fits in the knapsack
-    if (cw + items[idx].w <= cap) {
+    if (cw + static_cast<int64>(items[idx].w) <= cap) {
         curr[items[idx].id] = 1;                                              // Mark item as taken (using original ID)
-        solve(idx + 1, cw + items[idx].w, cv + items[idx].v);               // Recurse to next item
+        solve(idx + 1, cw + static_cast<int64>(items[idx].w), cv + static_cast<int64>(items[idx].v));               // Recurse to next item
         curr[items[idx].id] = 0;                                              // Backtrack: unmark item
     }
 
@@ -90,10 +93,10 @@ void solve(int idx, double cw, double cv) {
 
 // --- Memory Usage Helper ---
 // Returns peak memory usage in bytes using system resource information
-long getmem() {
+size_t getmem() {
     struct rusage u;
     getrusage(RUSAGE_SELF, &u);
-    return u.ru_maxrss * 1024;  // Convert KB (Linux) to bytes
+    return static_cast<size_t>(u.ru_maxrss) * 1024;  // Convert KB (Linux) to bytes
 }
 
 // --- Main Function ---
@@ -105,8 +108,8 @@ int main() {
     // --- Input Reading ---
     cin >> n >> cap;
     vector<double> w(n), v(n);
-    for (int i = 0; i < n; i++) cin >> w[i];
-    for (int i = 0; i < n; i++) cin >> v[i];
+    for (size_t i = 0; i < n; i++) cin >> w[i];
+    for (size_t i = 0; i < n; i++) cin >> v[i];
 
     // --- Start Timer ---
     auto t0 = chrono::high_resolution_clock::now();
@@ -114,10 +117,10 @@ int main() {
     // --- Setup Items ---
     // Create Item objects with original indices and compute ratios
     items.resize(n);
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         // Handle zero-weight items: assign infinite ratio so they're processed first
         double r = w[i] == 0 ? 1e18 : v[i] / w[i];
-        items[i] = {i, w[i], v[i], r};
+        items[i] = { i, w[i], v[i], r };
     }
 
     // --- Sort by Ratio (Crucial for B&B Performance) ---
@@ -132,9 +135,9 @@ int main() {
 
     // --- Start Branch and Bound Search ---
     // Initialize: start from item 0, with 0 weight and 0 value
-    int initial_idx = 0;      // Start considering from first item
-    double initial_weight = 0; // No weight used yet
-    double initial_value = 0;  // No value gained yet
+    size_t initial_idx = 0;      // Start considering from first item
+    int64 initial_weight = 0;    // No weight used yet
+    int64 initial_value = 0;     // No value gained yet
     solve(initial_idx, initial_weight, initial_value);
 
     // --- Stop Timer ---
@@ -143,30 +146,31 @@ int main() {
 
     // --- Reconstruct Solution ---
     // Collect original item IDs that were selected (best[i] == true)
-    vector<int> res;
-    for (int i = 0; i < n; i++) {
+    vector<size_t> res;
+    for (size_t i = 0; i < n; i++) {
         if (best[i]) res.push_back(i);
     }
 
     // --- Output Formatting ---
-    // Line 1: Maximum profit (as long long)
-    cout << (long long)maxP << '\n';
-    
+    // Line 1: Maximum profit (as int64)
+    cout << maxP << '\n';
+
     // Line 2: Number of selected items
     cout << res.size() << '\n';
-    
+
     // Line 3: Item IDs (space-separated) or empty line if no items
     if (!res.empty()) {
-        for (int i = 0; i < res.size(); i++) {
+        for (size_t i = 0; i < res.size(); i++) {
             cout << res[i] << (i == res.size() - 1 ? '\n' : ' ');
         }
-    } else {
+    }
+    else {
         cout << '\n';
     }
-    
+
     // Line 4: Execution time (microseconds)
     cout << dur << '\n';
-    
+
     // Line 5: Peak memory usage (bytes)
     cout << getmem() << '\n';
 
