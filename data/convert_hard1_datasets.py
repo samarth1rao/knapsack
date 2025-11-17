@@ -97,7 +97,7 @@ def main():
     instances_dir = base_dir / "gh_knapsackProblemInstances" / "problemInstances"
     optima_path = base_dir / "gh_knapsackProblemInstances" / "optima.csv"
 
-    output_file = base_dir / "knapsack_hard_dataset.csv"
+    output_file = base_dir / "knapsack_hard1_dataset.csv"
 
     # Load optima
     print("Loading optima.csv...")
@@ -139,7 +139,7 @@ def main():
 
                 all_data.append(
                     {
-                        "category": "known",
+                        "category": "H1known",
                         "n": n,
                         "weights": str(weights),
                         "prices": str(prices),
@@ -156,7 +156,7 @@ def main():
             # Optimum not known
             all_data.append(
                 {
-                    "category": "unknown",
+                    "category": "H1unknown",
                     "n": n,
                     "weights": str(weights),
                     "prices": str(prices),
@@ -167,8 +167,8 @@ def main():
             )
 
     print(f"\nProcessed {len(instance_folders)} instances")
-    known_count = sum(1 for row in all_data if row["category"] == "known")
-    unknown_count = sum(1 for row in all_data if row["category"] == "unknown")
+    known_count = sum(1 for row in all_data if row["category"] == "H1known")
+    unknown_count = sum(1 for row in all_data if row["category"] == "H1unknown")
     print(f"Known optima: {known_count}")
     print(f"Unknown optima: {unknown_count}")
 

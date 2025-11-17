@@ -11,22 +11,22 @@ using int64 = long long;
 
 // Struct to hold the results of the genetic algorithm.
 struct Result {
-    int64 maxValue;                 // The maximum value found for the knapsack.
-    std::vector<int> selectedItems; // The indices of the items selected to achieve the max value.
-    int64 executionTime;            // Total execution time in microseconds.
-    size_t memoryUsed;              // Approximate memory usage in bytes.
+    int64 maxValue;                     // The maximum value found for the knapsack.
+    std::vector<size_t> selectedItems;  // The indices of the items selected to achieve the max value.
+    int64 executionTime;                // Total execution time in microseconds.
+    size_t memoryUsed;                  // Approximate memory usage in bytes.
 };
 
 // Struct to hold item properties for sorting.
 struct ItemProperty {
-    int id;
+    size_t id;
     double ratio;
 };
 
 
 // Genetic Algorithm hyperparameters. These can be overridden by command-line arguments.
-int POPULATION_SIZE = -1;                   // Size of the population. If -1, set heuristically.
-int MAX_GENERATIONS = -1;                   // Number of generations. If -1, set heuristically.
+size_t POPULATION_SIZE = 0;                 // Size of the population. If -1, set heuristically.
+size_t MAX_GENERATIONS = 0;                 // Number of generations. If -1, set heuristically.
 double CROSSOVER_RATE = 0.53;               // Probability of crossover.
 double MUTATION_RATE = 0.013;               // Probability of mutation.
 double REPRODUCTION_RATE = 0.15;            // Probability of direct reproduction.
@@ -36,11 +36,14 @@ unsigned int SEED = std::random_device()(); // Seed for random number generator.
 int64 KNAPSACK_CAPACITY;                // Maximum weight the knapsack can hold.
 std::vector<int64> ITEM_WEIGHTS;        // Weights of the items.
 std::vector<int64> ITEM_VALUES;         // Values of the items.
-int NUM_ITEMS;                          // Total number of items.
-std::vector<ItemProperty> SORTED_ITEMS; // Pre-sorted list of items by value-to-weight ratio.
+size_t NUM_ITEMS;                       // Total number of items.
 
-// Mersenne Twister random number generator, will be seeded in main.
-std::mt19937 rng;
+// Global helper variables.
+std::vector<ItemProperty> SORTED_ITEMS; // Pre-sorted list of items by value-to-weight ratio.
+int64 MIN_ITEM_WEIGHT;                  // Minimum item weight in the instance.
+
+// Global random number generator.
+std::mt19937 rng;   // Mersenne Twister random number generator, seeded in main.
 
 
 // Class to represent an individual in the population.
@@ -54,13 +57,13 @@ public:
     mutable bool fitnessValid = false;  // Flag to check if the cached fitness is valid.
 
     // Constructor to create an individual with a given number of items, initialised to false.
-    Individual(int n) : bits(n, false) {}
+    Individual(size_t n) : bits(n, false) {}
 
     // Calculates total value and weight from scratch. To be called after major changes.
     void calculateMetrics() {
         totalValue = 0;
         totalWeight = 0;
-        for (int i = 0; i < NUM_ITEMS; ++i) {
+        for (size_t i = 0; i < NUM_ITEMS; ++i) {
             if (bits[i]) {
                 totalValue += ITEM_VALUES[i];
                 totalWeight += ITEM_WEIGHTS[i];
@@ -90,27 +93,115 @@ public:
     }
 
     // Repairs an individual that is overweight (total weight > knapsack capacity).
-    // It removes items with the lowest value-to-weight ratio until the individual is valid.
+    // Uses a two-phase approach: first removes low-ratio items, then greedily adds high-ratio items.
     void repair() {
-        // Repaired flag.
-        bool repaired = false;
-        // Remove the worst items till the weight is within capacity.
-        for (const auto &itemProp : SORTED_ITEMS) {
-            // If the individual is within capacity, stop repair.
+        // Phase 1: Remove the worst items till the weight is within capacity.
+        // Iterate through items sorted by value-to-weight ratio (worst to best).
+        for (size_t i = 0; i < NUM_ITEMS; ++i) {
+            // Early exit: weight is within capacity
             if (totalWeight <= KNAPSACK_CAPACITY) {
                 break;
             }
             // Remove the item if it is included in the individual.
-            if (bits[itemProp.id]) {
-                bits[itemProp.id] = false;                  // Remove item by setting its bit to false.
-                totalWeight -= ITEM_WEIGHTS[itemProp.id];   // Update the total weight.
-                totalValue -= ITEM_VALUES[itemProp.id];     // Update the total value.
-                repaired = true;                            // Set repaired flag.
+            size_t itemId = SORTED_ITEMS[i].id;
+            if (bits[itemId]) {
+                bits[itemId] = false;                  // Remove item by setting its bit to false.
+                totalWeight -= ITEM_WEIGHTS[itemId];   // Update the total weight.
+                totalValue -= ITEM_VALUES[itemId];     // Update the total value.
+                fitnessValid = false;                  // Invalidate fitness cache.
             }
         }
-        // Invalidate the fitness cache if the individual has been modified.
-        if (repaired) {
+        // Phase 2: Greedily add items with the best value-to-weight ratio that fit.
+        // Iterate through items sorted by value-to-weight ratio (best to worst).
+        for (size_t i = NUM_ITEMS; i > 0; --i) {
+            // Early exit: remaining capacity is 0
+            if (totalWeight == KNAPSACK_CAPACITY) {
+                break;
+            }
+            // Early exit: remaining capacity is less than minimum item weight
+            if (KNAPSACK_CAPACITY - totalWeight < MIN_ITEM_WEIGHT) {
+                break;
+            }
+            // Try to add the item if it's not already included and fits within capacity.
+            size_t itemId = SORTED_ITEMS[i - 1].id;
+            if (!bits[itemId] && totalWeight + ITEM_WEIGHTS[itemId] <= KNAPSACK_CAPACITY) {
+                bits[itemId] = true;                    // Add item by setting its bit to true.
+                totalWeight += ITEM_WEIGHTS[itemId];    // Update the total weight.
+                totalValue += ITEM_VALUES[itemId];      // Update the total value.
+                fitnessValid = false;                   // Invalidate fitness cache.
+            }
+        }
+    }
+
+    // Applies mutation to the individual.
+    // Each bit in the individual's bit string has a chance to be flipped.
+    void mutate() {
+        // Distribution for mutation probability.
+        std::uniform_real_distribution<double> probDist(0.0, 1.0);
+        // Mutation flag.
+        bool mutated = false;
+        // Apply mutation to each bit.
+        for (size_t i = 0; i < NUM_ITEMS; ++i) {
+            // Flip the bit with probability MUTATION_RATE and update metrics accordingly.
+            if (probDist(rng) < MUTATION_RATE) {
+                // Flipping true-> false, removing item.
+                if (bits[i]) {
+                    totalValue -= ITEM_VALUES[i];
+                    totalWeight -= ITEM_WEIGHTS[i];
+                }
+                // Flipping false-> true, adding item.
+                else {
+                    totalValue += ITEM_VALUES[i];
+                    totalWeight += ITEM_WEIGHTS[i];
+                }
+                // Flip the bit and set mutated flag.
+                bits[i].flip();
+                mutated = true;
+            }
+        }
+        // Invalidate fitness cache if mutation occurred.
+        if (mutated) {
             fitnessValid = false;
+        }
+    }
+
+    // Applies local search to improve the individual.
+    // Tries item swaps and replacements to find better solutions.
+    void localSearch() {
+        // TODO: remove return; to activate local search AFTER OPTIMISING - currently O(n^2)
+        return;
+        // Local search flag.
+        bool improved = true;
+        // Repeat while improvements are found.
+        while (improved) {
+            improved = false;
+            // Try to swap items: remove one included item and add one excluded item.
+            for (size_t i = 0; i < NUM_ITEMS && !improved; ++i) {
+                // Skip items not in the knapsack.
+                if (!bits[i]) {
+                    continue;
+                }
+                // Try swapping with each item not in the knapsack.
+                for (size_t j = 0; j < NUM_ITEMS && !improved; ++j) {
+                    // Skip items already in the knapsack.
+                    if (bits[j]) {
+                        continue;
+                    }
+                    // Calculate the change in weight and value if we swap items i and j.
+                    int64 weightChange = ITEM_WEIGHTS[j] - ITEM_WEIGHTS[i];
+                    int64 valueChange = ITEM_VALUES[j] - ITEM_VALUES[i];
+                    // Check if the swap is feasible and improves the solution.
+                    if (totalWeight + weightChange <= KNAPSACK_CAPACITY && valueChange > 0) {
+                        // Perform the swap.
+                        bits[i] = false;
+                        bits[j] = true;
+                        totalWeight += weightChange;
+                        totalValue += valueChange;
+                        fitnessValid = false;
+                        improved = true;
+                    }
+                }
+            }
         }
     }
 };
@@ -122,7 +213,7 @@ void preSortItems() {
     SORTED_ITEMS.resize(NUM_ITEMS);
 
     // Compute value-to-weight ratio for each item. Handle zero weight case.
-    for (int i = 0; i < NUM_ITEMS; ++i) {
+    for (size_t i = 0; i < NUM_ITEMS; ++i) {
         SORTED_ITEMS[i].id = i;
         if (ITEM_WEIGHTS[i] > 0) {
             SORTED_ITEMS[i].ratio = static_cast<double>(ITEM_VALUES[i]) / ITEM_WEIGHTS[i];
@@ -146,23 +237,77 @@ void preSortItems() {
 }
 
 
-// Generates the initial population of random individuals.
+// Finds minimum item weight in the instance for early exit optimization.
+void findMinItemWeight() {
+    // Handle empty item list.
+    if (ITEM_WEIGHTS.empty()) {
+        MIN_ITEM_WEIGHT = 0;
+        return;
+    }
+    // Find and store the minimum item weight.
+    MIN_ITEM_WEIGHT = *std::min_element(ITEM_WEIGHTS.begin(), ITEM_WEIGHTS.end());
+}
+
+
+// Generates a greedy individual based on value-to-weight ratio.
+Individual generateGreedyIndividual() {
+    // Create an empty individual.
+    Individual ind(NUM_ITEMS);
+
+    // Add items in order of best value-to-weight ratio until capacity is reached.
+    for (auto it = SORTED_ITEMS.rbegin(); it != SORTED_ITEMS.rend(); ++it) {
+        size_t itemId = it->id;
+        if (ind.totalWeight + ITEM_WEIGHTS[itemId] <= KNAPSACK_CAPACITY) {
+            ind.bits[itemId] = true;                // Add item by setting its bit to true.
+            ind.totalWeight += ITEM_WEIGHTS[itemId];// Update the total weight.
+            ind.totalValue += ITEM_VALUES[itemId];  // Update the total value.
+        }
+    }
+
+    return ind;
+}
+
+
+// Generates a random individual.
+Individual generateRandomIndividual() {
+    // Create an empty individual.
+    Individual ind(NUM_ITEMS);
+    // Distribution for generating random bits.
+    std::uniform_int_distribution<int> bitDist(0, 1);
+
+    // Randomly set bits in the individual's bit string.
+    for (size_t i = 0; i < NUM_ITEMS; ++i) {
+        if (bitDist(rng)) {
+            ind.bits[i] = true;                 // Add item by setting its bit to true.
+            ind.totalWeight += ITEM_WEIGHTS[i]; // Update the total weight.
+            ind.totalValue += ITEM_VALUES[i];   // Update the total value.
+        }
+    }
+
+    return ind;
+}
+
+
+// Generates the initial population with a mix of greedy and random individuals.
 std::vector<Individual> generateInitialPopulation() {
     // Init population vector.
     std::vector<Individual> population;
     population.reserve(POPULATION_SIZE);
-    // Distribution for generating random bits.
-    std::uniform_int_distribution<int> bitDist(0, 1);
 
-    // Create POPULATION_SIZE individuals with random bit strings.
-    for (int p = 0; p < POPULATION_SIZE; ++p) {
-        Individual ind(NUM_ITEMS);
-        for (int i = 0; i < NUM_ITEMS; ++i) {
-            ind.bits[i] = (bitDist(rng) == 1);
+    // Determine how many greedy individuals to include (about 5% of population).
+    size_t numGreedy = std::max(size_t(1), POPULATION_SIZE / 20);
+    // Create greedy individuals.
+    if (numGreedy) {
+        Individual greedyInd = generateGreedyIndividual();
+        for (size_t p = 0; p < numGreedy; ++p) {
+            population.push_back(greedyInd);
         }
-        // Calculate metrics once from scratch.
-        ind.calculateMetrics();
-        population.push_back(ind);
+    }
+
+    // Create random individuals.
+    for (size_t p = numGreedy; p < POPULATION_SIZE; ++p) {
+        Individual randInd = generateRandomIndividual();
+        population.push_back(randInd);
     }
 
     // Repair any individuals in the initial population that are overweight.
@@ -177,13 +322,13 @@ std::vector<Individual> generateInitialPopulation() {
 // Selects two parent individuals from the population using tournament selection.
 std::pair<const Individual *, const Individual *> selection(const std::vector<Individual> &population) {
     // Distribution for generating random indices.
-    std::uniform_int_distribution<int> indexDist(0, POPULATION_SIZE - 1);
+    std::uniform_int_distribution<size_t> indexDist(0, POPULATION_SIZE - 1);
 
     // Select four random individuals from the population.
-    int idx1 = indexDist(rng);
-    int idx2 = indexDist(rng);
-    int idx3 = indexDist(rng);
-    int idx4 = indexDist(rng);
+    size_t idx1 = indexDist(rng);
+    size_t idx2 = indexDist(rng);
+    size_t idx3 = indexDist(rng);
+    size_t idx4 = indexDist(rng);
 
     // Ensure distinct indices (individuals) for tournament selection.
     while (idx2 == idx1) {
@@ -214,59 +359,30 @@ std::pair<const Individual *, const Individual *> selection(const std::vector<In
 }
 
 
-// Performs single-point crossover on two parent individuals to create two children.
-// The bit strings of the parents are split at the midpoint and swapped.
+// Performs uniform crossover on two parent individuals to create two children.
+// Each bit is independently inherited from either parent with equal probability.
 void crossover(const Individual &parent1, const Individual &parent2,
     Individual &child1, Individual &child2) {
-    // Crossover point is the midpoint of the bit string.
-    int midpoint = NUM_ITEMS / 2;
+    // Distribution for selecting parent for each bit.
+    std::uniform_int_distribution<int> parentDist(0, 1);
 
-    // Child 1: First half from parent1, second half from parent2.
-    std::copy(parent1.bits.begin(), parent1.bits.begin() + midpoint, child1.bits.begin());
-    std::copy(parent2.bits.begin() + midpoint, parent2.bits.end(), child1.bits.begin() + midpoint);
-
-    // Child 2: First half from parent2, second half from parent1.
-    std::copy(parent2.bits.begin(), parent2.bits.begin() + midpoint, child2.bits.begin());
-    std::copy(parent1.bits.begin() + midpoint, parent1.bits.end(), child2.bits.begin() + midpoint);
+    // For each bit position, randomly choose which parent to inherit from.
+    for (size_t i = 0; i < NUM_ITEMS; ++i) {
+        if (parentDist(rng) == 0) {
+            // Child 1 inherits from parent1, child 2 from parent2.
+            child1.bits[i] = parent1.bits[i];
+            child2.bits[i] = parent2.bits[i];
+        }
+        else {
+            // Child 1 inherits from parent2, child 2 from parent1.
+            child1.bits[i] = parent2.bits[i];
+            child2.bits[i] = parent1.bits[i];
+        }
+    }
 
     // Recalculate metrics from scratch for the children.
     child1.calculateMetrics();
     child2.calculateMetrics();
-}
-
-
-// Applies mutation to an individual.
-// Each bit in the individual's bit string has a chance to be flipped.
-void mutate(Individual &individual) {
-    // Distribution for mutation probability.
-    std::uniform_real_distribution<double> probDist(0.0, 1.0);
-
-    // Mutation flag.
-    bool mutated = false;
-    // Apply mutation to each bit.
-    for (int i = 0; i < NUM_ITEMS; ++i) {
-        // Flip the bit with probability MUTATION_RATE and update metrics accordingly.
-        if (probDist(rng) < MUTATION_RATE) {
-            // Flipping true-> false, removing item.
-            if (individual.bits[i]) {
-                individual.totalValue -= ITEM_VALUES[i];
-                individual.totalWeight -= ITEM_WEIGHTS[i];
-            }
-            // Flipping false-> true, adding item.
-            else {
-                individual.totalValue += ITEM_VALUES[i];
-                individual.totalWeight += ITEM_WEIGHTS[i];
-            }
-            // Flip the bit and set mutated flag.
-            individual.bits[i].flip();
-            mutated = true;
-        }
-    }
-
-    // Invalidate fitness cache if mutation occurred.
-    if (mutated) {
-        individual.fitnessValid = false;
-    }
 }
 
 
@@ -283,7 +399,7 @@ void nextGeneration(const std::vector<Individual> &currentPop, std::vector<Indiv
     nextPop[0] = *bestIt;
 
     // Fill the rest of the next population.
-    for (size_t i = 1; i < static_cast<size_t>(POPULATION_SIZE); ) {
+    for (size_t i = 1; i < POPULATION_SIZE; ) {
         // Select two parents using tournament selection.
         auto [parent1, parent2] = selection(currentPop);
 
@@ -291,14 +407,14 @@ void nextGeneration(const std::vector<Individual> &currentPop, std::vector<Indiv
         if (probDist(rng) < REPRODUCTION_RATE) {
             // Reproduction: Directly copy parents to the next population.
             nextPop[i++] = *parent1;
-            if (i < static_cast<size_t>(POPULATION_SIZE)) {
+            if (i < POPULATION_SIZE) {
                 nextPop[i++] = *parent2;
             }
         }
         else {
             // Select two children slots in the next population.
             Individual &child1 = nextPop[i];
-            Individual &child2 = (i + 1 < static_cast<size_t>(POPULATION_SIZE)) ? nextPop[i + 1] : child1;
+            Individual &child2 = (i + 1 < POPULATION_SIZE) ? nextPop[i + 1] : child1;
 
             // Decide whether to perform crossover.
             if (probDist(rng) < CROSSOVER_RATE) {
@@ -308,20 +424,22 @@ void nextGeneration(const std::vector<Individual> &currentPop, std::vector<Indiv
             else {
                 // No crossover: Children are copies of the parents.
                 child1 = *parent1;
-                if (i + 1 < static_cast<size_t>(POPULATION_SIZE)) {
+                if (i + 1 < POPULATION_SIZE) {
                     child2 = *parent2;
                 }
             }
 
-            // Mutate and repair child1.
-            mutate(child1);
+            // Mutate, repair, and apply local search to child1.
+            child1.mutate();
             child1.repair();
+            child1.localSearch();
             i++;
 
-            // Mutate and repair child2 if there's space in the population.
-            if (i < static_cast<size_t>(POPULATION_SIZE) && &child1 != &child2) {
-                mutate(child2);
+            // Mutate, repair, and apply local search to child2 if there's space in the population.
+            if (i < POPULATION_SIZE && &child1 != &child2) {
+                child2.mutate();
                 child2.repair();
+                child2.localSearch();
                 i++;
             }
         }
@@ -340,12 +458,15 @@ Result solveKnapsackGenetic() {
     // Pre-sort items by value-to-weight ratio.
     preSortItems();
 
+    // Find minimum item weight for early exit optimisation
+    findMinItemWeight();
+
     // Create the initial population.
     std::vector<Individual> population = generateInitialPopulation();
     std::vector<Individual> nextPopulation(POPULATION_SIZE, Individual(NUM_ITEMS));
 
     // Evolve the population over generations.
-    for (int gen = 0; gen < MAX_GENERATIONS; ++gen) {
+    for (size_t gen = 0; gen < MAX_GENERATIONS; ++gen) {
         nextGeneration(population, nextPopulation);
         population.swap(nextPopulation);
     }
@@ -363,7 +484,7 @@ Result solveKnapsackGenetic() {
     result.maxValue = bestIndividual.getFitness();
 
     // Collect the indices of the selected items.
-    for (int i = 0; i < NUM_ITEMS; ++i) {
+    for (size_t i = 0; i < NUM_ITEMS; ++i) {
         if (bestIndividual.bits[i]) {
             result.selectedItems.push_back(i);
         }
@@ -382,7 +503,7 @@ Result solveKnapsackGenetic() {
     }
     size_t vectorMemory =
         (sizeof(int64) * (ITEM_WEIGHTS.capacity() + ITEM_VALUES.capacity())) +
-        (sizeof(int) * result.selectedItems.capacity()) +
+        (sizeof(size_t) * result.selectedItems.capacity()) +
         (sizeof(ItemProperty) * SORTED_ITEMS.capacity());
     result.memoryUsed = populationMemory + vectorMemory;
 
@@ -395,22 +516,22 @@ void parseArguments(int argc, char *argv[]) {
         std::string arg = argv[i];
 
         if (arg == "--population_size" && i + 1 < argc) {
-            POPULATION_SIZE = atoi(argv[++i]);
+            POPULATION_SIZE = std::stoul(argv[++i]);
         }
         else if (arg == "--max_generations" && i + 1 < argc) {
-            MAX_GENERATIONS = atoi(argv[++i]);
+            MAX_GENERATIONS = std::stoul(argv[++i]);
         }
         else if (arg == "--crossover_rate" && i + 1 < argc) {
-            CROSSOVER_RATE = atof(argv[++i]);
+            CROSSOVER_RATE = std::stod(argv[++i]);
         }
         else if (arg == "--mutation_rate" && i + 1 < argc) {
-            MUTATION_RATE = atof(argv[++i]);
+            MUTATION_RATE = std::stod(argv[++i]);
         }
         else if (arg == "--reproduction_rate" && i + 1 < argc) {
-            REPRODUCTION_RATE = atof(argv[++i]);
+            REPRODUCTION_RATE = std::stod(argv[++i]);
         }
         else if (arg == "--seed" && i + 1 < argc) {
-            SEED = static_cast<unsigned int>(atoi(argv[++i]));
+            SEED = static_cast<unsigned int>(std::stoi(argv[++i]));
         }
         else if (arg == "--help" || arg == "-h") {
             std::cerr << "Usage: " << argv[0] << " [options]" << "\n";
@@ -438,7 +559,7 @@ int main(int argc, char *argv[]) {
     rng.seed(SEED);
 
     // Read problem instance from standard input.
-    int n;
+    size_t n;
     int64 capacity;
     std::cin >> n >> capacity;
 
@@ -447,7 +568,7 @@ int main(int argc, char *argv[]) {
     KNAPSACK_CAPACITY = capacity;
 
     // If population size is not provided, compute it using a heuristic.
-    if (POPULATION_SIZE == -1) {
+    if (POPULATION_SIZE == 0) {
         if (n < 100) {
             POPULATION_SIZE = 20;
         }
@@ -463,7 +584,7 @@ int main(int argc, char *argv[]) {
     }
 
     // If max generations is not provided, compute it using a heuristic.
-    if (MAX_GENERATIONS == -1) {
+    if (MAX_GENERATIONS == 0) {
         if (n < 100) {
             MAX_GENERATIONS = 200;
         }
@@ -483,12 +604,12 @@ int main(int argc, char *argv[]) {
     ITEM_VALUES.resize(n);
 
     // Read item weights.
-    for (int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         std::cin >> ITEM_WEIGHTS[i];
     }
 
     // Read item values.
-    for (int i = 0; i < NUM_ITEMS; ++i) {
+    for (size_t i = 0; i < NUM_ITEMS; ++i) {
         std::cin >> ITEM_VALUES[i];
     }
 
