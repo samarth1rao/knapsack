@@ -273,7 +273,7 @@ def main():
         if args.mode == "easy":
             # Easy mode does not require capacity
             cmd = [str(cpp_exe_path), str(args.out), cat, str(n), str(seed)]
-        if args.mode == "trap":
+        elif args.mode == "trap":
             capacity = 0
             # Trap mode requires capacity parameter
             if cat == "Tiny":

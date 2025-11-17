@@ -1085,7 +1085,7 @@ def main():
     # Note: memory limit will be split among parallel tasks
     simulation_runs = [
         # -- Default --
-        ["knapsack_easy_dataset.csv", "Tiny", 1],
+        ["knapsack_easy_dataset.csv", "ETiny", 1],
         # -- Easy --
         # ["knapsack_easy_dataset_l012_400.csv", "ETiny", 12, 14],
         # ["knapsack_easy_dataset_l012_400.csv", "ESmall", 12, 22],
