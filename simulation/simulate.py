@@ -98,6 +98,11 @@ class KnapsackSimulator:
                 "name": "Genetic Algorithm",
                 "sort_key": lambda n, w: n,  # n * P * G,
             },
+            "customtestbed": {
+                "executable": self.algorithms_path / "bin" / "customtestbed",
+                "name": "Custom Testbed",
+                "sort_key": lambda n, w: n,
+            },
             "customalgorithm": {
                 "executable": self.algorithms_path / "bin" / "customalgorithm",
                 "name": "Custom Algorithm",
@@ -1128,9 +1133,12 @@ def main():
             memory_limit_gb=memory_limit_gb,
         )
 
-        # Create visualisations
-        logger.info("Generating visualisations...")
-        simulator.create_visualisations(results_df, category=category)
+        # Create visualisations only if we have results
+        if results_df is not None and not results_df.empty:
+            logger.info("Generating visualisations...")
+            simulator.create_visualisations(results_df, category=category)
+        else:
+            logger.warning("No results to visualise for category %s (check dataset and runs).", category)
 
     logger.info("=" * 60)
     logger.info("All simulations completed successfully!")
