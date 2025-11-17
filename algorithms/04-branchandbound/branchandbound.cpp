@@ -1,207 +1,174 @@
-
-#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <chrono>
-#include <queue>
-#include <limits>
-
+#include<iostream>
+#include<vector>
+#include<algorithm>
+#include<chrono>
+#include<sys/resource.h>
 using namespace std;
-using int64 = long long;
 
-// Struct to represent a node in the branch and bound tree
-struct Node {
-    int level;      // Current item index being considered
-    int64 value;    // Current total value
-    int64 weight;   // Current total weight
-    double bound;   // Upper bound on maximum value
-    vector<int> selectedItems; // Items selected so far
-
-    // Constructor
-    Node(int l, int64 v, int64 w, double b, const vector<int> &sel)
-        : level(l), value(v), weight(w), bound(b), selectedItems(sel) {
-    }
-
-    // For priority queue (max-heap based on bound)
-    bool operator<(const Node &other) const {
-        return bound < other.bound;
-    }
+// --- Structures ---
+struct Item {
+    int id;        // Original index before sorting
+    double w;      // Weight
+    double v;      // Value
+    double r;      // Value-to-weight ratio
 };
 
-// Result struct to hold all output
-struct Result {
-    int64 maxValue;
-    vector<int> selectedItems;
-    int64 executionTime; // in microseconds
-    size_t memoryUsed; // in bytes (approximate)
-};
+// --- Global Variables ---
+int n;                    // Number of items
+double cap;               // Knapsack capacity
+double maxP = 0;          // Maximum profit found so far
+vector<Item> items;       // Items sorted by ratio (descending)
+vector<bool> best;        // Best solution found (indexed by original ID)
+vector<bool> curr;        // Current solution state during recursion (indexed by original ID)
 
-/**
- * @brief Calculate upper bound using fractional knapsack relaxation
- * @param node Current node
- * @param n Total number of items
- * @param capacity Knapsack capacity
- * @param weights Item weights
- * @param values Item values
- * @return Upper bound on maximum value from this node
- */
-double calculateBound(const Node &node, int n, int64 capacity,
-    const vector<int> &weights, const vector<int> &values) {
-    if (node.weight >= capacity) {
-        return 0; // Invalid node
-    }
+// --- Comparator for Sorting ---
+// Sort items by value-to-weight ratio in descending order
+bool cmpI(const Item& a, const Item& b) {
+    return a.r > b.r;
+}
 
-    double bound = static_cast<double>(node.value);
-    int64 remainingWeight = capacity - node.weight;
-    int j = node.level + 1;
+// --- Upper Bound Calculation ---
+// Calculates the maximum possible value from index 'idx' onwards using fractional knapsack
+// This serves as an upper bound for pruning branches that cannot improve the current best solution
+double bound(int idx, double cw, double cv) {
+    double rc = cap - cw;           // Remaining capacity
+    double b = cv;                  // Start with current value
+    int j = idx;
 
-    // Add items greedily (fractional knapsack)
-    while (j < n && remainingWeight > 0) {
-        if (weights[j] <= remainingWeight) {
-            // Take the whole item
-            bound += values[j];
-            remainingWeight -= weights[j];
-        }
-        else {
-            // Take fraction of the item
-            bound += values[j] * (static_cast<double>(remainingWeight) / weights[j]);
-            remainingWeight = 0;
-        }
+    // Greedily include full items in descending order of ratio
+    while (j < n && items[j].w <= rc) {
+        rc -= items[j].w;
+        b += items[j].v;
         j++;
     }
 
-    return bound;
+    // If there's still capacity and items remaining, add fractional part of next item
+    if (j < n) {
+        b += rc * items[j].r;
+    }
+
+    return b;
 }
 
-/**
- * @brief Solves the 0/1 Knapsack problem using Branch and Bound
- * @param capacity The total capacity of the knapsack
- * @param weights Const reference to the item weights vector
- * @param values Const reference to the item values vector
- * @return A Result struct containing the solution, time, and memory
- */
-Result solveKnapsackBranchAndBound(int64 capacity, const vector<int> &weights, const vector<int> &values) {
-    Result result;
-    int n = weights.size();
-
-    auto start = chrono::high_resolution_clock::now();
-
-    // Initialize result
-    result.maxValue = 0;
-    result.selectedItems.clear();
-
-    // Priority queue for branch and bound (max-heap)
-    priority_queue<Node> pq;
-
-    // Create root node
-    Node root(-1, 0, 0, 0.0, vector<int>());
-    root.bound = calculateBound(root, n, capacity, weights, values);
-    pq.push(root);
-
-    while (!pq.empty()) {
-        // Get the node with highest bound
-        Node current = pq.top();
-        pq.pop();
-
-        // If bound is worse than current best, prune
-        if (current.bound <= static_cast<double>(result.maxValue)) {
-            continue;
-        }
-
-        // If we've considered all items
-        if (current.level == n - 1) {
-            // Check if this is better than current best
-            if (current.value > result.maxValue && current.weight <= capacity) {
-                result.maxValue = current.value;
-                result.selectedItems = current.selectedItems;
-            }
-            continue;
-        }
-
-        // Consider next item (level + 1)
-        int nextLevel = current.level + 1;
-
-        // Branch 1: Don't take the item
-        {
-            Node child(nextLevel, current.value, current.weight,
-                0.0, current.selectedItems);
-            child.bound = calculateBound(child, n, capacity, weights, values);
-
-            if (child.bound > static_cast<double>(result.maxValue)) {
-                pq.push(child);
-            }
-        }
-
-        // Branch 2: Take the item (if it fits)
-        if (current.weight + weights[nextLevel] <= capacity) {
-            vector<int> newSelected = current.selectedItems;
-            newSelected.push_back(nextLevel);
-
-            Node child(nextLevel,
-                current.value + values[nextLevel],
-                current.weight + weights[nextLevel],
-                0.0,
-                newSelected);
-            child.bound = calculateBound(child, n, capacity, weights, values);
-
-            if (child.bound > static_cast<double>(result.maxValue)) {
-                pq.push(child);
-            }
-        }
+// --- Recursive Branch and Bound DFS ---
+// Explores the decision tree:
+//   - idx: current item being considered
+//   - cw: current total weight
+//   - cv: current total value
+void solve(int idx, double cw, double cv) {
+    // --- Update Best Solution ---
+    // If current value exceeds maximum found, record this as the new best solution
+    if (cv > maxP) {
+        maxP = cv;
+        best = curr;  // Copy the current state (O(n) operation, but necessary)
     }
 
-    // Sort selected items by index for consistent output
-    sort(result.selectedItems.begin(), result.selectedItems.end());
+    // --- Base Case: No more items ---
+    // If we've considered all items, stop recursion
+    if (idx >= n) return;
 
-    auto end = chrono::high_resolution_clock::now();
-    result.executionTime = chrono::duration_cast<chrono::microseconds>(end - start).count();
+    // --- Pruning: Bound Check ---
+    // If the theoretical maximum (upper bound) from this point is not better than
+    // the current best, prune this entire branch (no need to explore further)
+    if (bound(idx, cw, cv) <= maxP) {
+        return;
+    }
 
-    // Approximate memory used
-    // Priority queue memory is hard to estimate, but we can approximate
-    // based on input size and typical node count
-    size_t inputMemory = (sizeof(int) * weights.size()) + (sizeof(int) * values.size());
-    size_t resultMemory = sizeof(int) * result.selectedItems.size();
-    // Rough estimate: assume O(n) nodes in priority queue on average
-    size_t pqMemoryEstimate = sizeof(Node) * n;
-    result.memoryUsed = inputMemory + resultMemory + pqMemoryEstimate;
+    // --- Branch 1: INCLUDE Current Item ---
+    // Try taking the current item if it fits in the knapsack
+    if (cw + items[idx].w <= cap) {
+        curr[items[idx].id] = 1;                                              // Mark item as taken (using original ID)
+        solve(idx + 1, cw + items[idx].w, cv + items[idx].v);               // Recurse to next item
+        curr[items[idx].id] = 0;                                              // Backtrack: unmark item
+    }
 
-    return result;
+    // --- Branch 2: EXCLUDE Current Item ---
+    // Try not taking the current item (always possible, no weight constraint)
+    // Note: The bound check above already ensures this branch is worth exploring
+    solve(idx + 1, cw, cv);
 }
 
-int main(int argc, char *argv[]) {
-    // Use fast I/O
-    ios::sync_with_stdio(false);
-    cin.tie(nullptr);
+// --- Memory Usage Helper ---
+// Returns peak memory usage in bytes using system resource information
+long getmem() {
+    struct rusage u;
+    getrusage(RUSAGE_SELF, &u);
+    return u.ru_maxrss * 1024;  // Convert KB (Linux) to bytes
+}
 
-    // Read input from stdin
-    int n;
-    int64 capacity;
-    cin >> n >> capacity;
+// --- Main Function ---
+int main() {
+    // --- Fast I/O Setup ---
+    ios_base::sync_with_stdio(0);
+    cin.tie(0);
 
-    vector<int> weights(n);
-    vector<int> values(n);
+    // --- Input Reading ---
+    cin >> n >> cap;
+    vector<double> w(n), v(n);
+    for (int i = 0; i < n; i++) cin >> w[i];
+    for (int i = 0; i < n; i++) cin >> v[i];
 
+    // --- Start Timer ---
+    auto t0 = chrono::high_resolution_clock::now();
+
+    // --- Setup Items ---
+    // Create Item objects with original indices and compute ratios
+    items.resize(n);
     for (int i = 0; i < n; i++) {
-        cin >> weights[i];
+        // Handle zero-weight items: assign infinite ratio so they're processed first
+        double r = w[i] == 0 ? 1e18 : v[i] / w[i];
+        items[i] = {i, w[i], v[i], r};
     }
 
+    // --- Sort by Ratio (Crucial for B&B Performance) ---
+    // Sorting in descending order by ratio helps prune more branches early
+    // because we encounter high-value items first, setting a high threshold
+    sort(items.begin(), items.end(), cmpI);
+
+    // --- Initialize Solution Buffers ---
+    // Both are indexed by original item ID (0 to n-1), not sorted index
+    curr.assign(n, 0);  // Current working solution (false = not taken)
+    best.assign(n, 0);  // Best solution found (false = not taken)
+
+    // --- Start Branch and Bound Search ---
+    // Initialize: start from item 0, with 0 weight and 0 value
+    int initial_idx = 0;      // Start considering from first item
+    double initial_weight = 0; // No weight used yet
+    double initial_value = 0;  // No value gained yet
+    solve(initial_idx, initial_weight, initial_value);
+
+    // --- Stop Timer ---
+    auto t1 = chrono::high_resolution_clock::now();
+    auto dur = chrono::duration_cast<chrono::microseconds>(t1 - t0).count();
+
+    // --- Reconstruct Solution ---
+    // Collect original item IDs that were selected (best[i] == true)
+    vector<int> res;
     for (int i = 0; i < n; i++) {
-        cin >> values[i];
+        if (best[i]) res.push_back(i);
     }
 
-    // Solve the knapsack problem
-    Result result = solveKnapsackBranchAndBound(capacity, weights, values);
-
-    // Output results in required format
-    cout << result.maxValue << endl;
-    cout << result.selectedItems.size() << endl;
-    for (size_t i = 0; i < result.selectedItems.size(); ++i) {
-        cout << result.selectedItems[i];
-        if (i + 1 < result.selectedItems.size()) cout << " ";
+    // --- Output Formatting ---
+    // Line 1: Maximum profit (as long long)
+    cout << (long long)maxP << '\n';
+    
+    // Line 2: Number of selected items
+    cout << res.size() << '\n';
+    
+    // Line 3: Item IDs (space-separated) or empty line if no items
+    if (!res.empty()) {
+        for (int i = 0; i < res.size(); i++) {
+            cout << res[i] << (i == res.size() - 1 ? '\n' : ' ');
+        }
+    } else {
+        cout << '\n';
     }
-    cout << endl;
-    cout << result.executionTime << endl;
-    cout << result.memoryUsed << endl;
+    
+    // Line 4: Execution time (microseconds)
+    cout << dur << '\n';
+    
+    // Line 5: Peak memory usage (bytes)
+    cout << getmem() << '\n';
 
     return 0;
 }
