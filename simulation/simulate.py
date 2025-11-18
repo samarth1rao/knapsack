@@ -52,61 +52,73 @@ class KnapsackSimulator:
                 "executable": self.algorithms_path / "bin" / "bruteforce",
                 "name": "Brute Force",
                 "sort_key": lambda n, w: n,  # 2**n,
+                "millionscale": False,
             },
             "memoization": {
                 "executable": self.algorithms_path / "bin" / "memoization",
                 "name": "Memoization",
                 "sort_key": lambda n, w: n * w,
+                "millionscale": False,
             },
             "dynamicprogramming": {
                 "executable": self.algorithms_path / "bin" / "dynamicprogramming",
                 "name": "Dynamic Programming",
                 "sort_key": lambda n, w: n * w,
+                "millionscale": False,
             },
             "branchandbound": {
                 "executable": self.algorithms_path / "bin" / "branchandbound",
                 "name": "Branch and Bound",
                 "sort_key": lambda n, w: n,
+                "millionscale": False,
             },
             "meetinthemiddle": {
                 "executable": self.algorithms_path / "bin" / "meetinthemiddle",
                 "name": "Meet in the Middle",
                 "sort_key": lambda n, w: n,  # (2 ** (n / 2)) * n,
+                "millionscale": False,
             },
             "greedyheuristic": {
                 "executable": self.algorithms_path / "bin" / "greedyheuristic",
                 "name": "Greedy Heuristic",
                 "sort_key": lambda n, w: n,  # n * np.log(n),
+                "millionscale": True,
             },
             "randompermutation": {
                 "executable": self.algorithms_path / "bin" / "randompermutation",
                 "name": "Random Permutation",
                 "sort_key": lambda n, w: (n**1.5) * w,
+                "millionscale": False,
             },
             "efficientalgo": {
                 "executable": self.algorithms_path / "bin" / "efficientalgo",
                 "name": "Efficient Algorithm",
                 "sort_key": lambda n, w: n,  # n * np.log(n),
+                "millionscale": False,
             },
             "billionscale": {
                 "executable": self.algorithms_path / "bin" / "billionscale",
                 "name": "Billion Scale",
                 "sort_key": lambda n, w: n,  # (n * M) + n * np.log(n),
+                "millionscale": True,
             },
             "geneticalgorithm": {
                 "executable": self.algorithms_path / "bin" / "geneticalgorithm",
                 "name": "Genetic Algorithm",
                 "sort_key": lambda n, w: n,  # n * P * G,
+                "millionscale": True,
             },
             "customalgorithm": {
                 "executable": self.algorithms_path / "bin" / "customalgorithm",
                 "name": "Custom Algorithm",
                 "sort_key": lambda n, w: n,
+                "millionscale": True,
             },
             "customtestbed": {
                 "executable": self.algorithms_path / "bin" / "customtestbed",
                 "name": "Custom Testbed",
                 "sort_key": lambda n, w: n,
+                "millionscale": True,
             },
         }
         # Base timeout (seconds) used as part of adaptive timeout calculation
@@ -1215,6 +1227,7 @@ class KnapsackSimulator:
     ):
         """Run algorithm tests in parallel with batching and failure tracking"""
         algo_display_name = self.algorithms[algo_name]["name"]
+        is_millionscale = self.algorithms[algo_name]["millionscale"]
         semaphore = asyncio.Semaphore(max_parallel)
 
         total_tests = len(sorted_indices)
@@ -1247,6 +1260,15 @@ class KnapsackSimulator:
                     return None
 
                 row = df.loc[idx]
+
+                # Skip non-millionscale algorithms for n > 1e6
+                if row["n"] > 1e6 and not is_millionscale:
+                    logger.info(
+                        f"{test_num}/{total_tests}: SKIPPING test_id={idx}, n={row['n']} "
+                        f"(n > 1e6, algorithm is not millionscale)"
+                    )
+                    return None
+
                 logger.info(
                     f"{test_num}/{total_tests}: test_id={idx}, n={row['n']}, capacity={row['capacity']}"
                 )
@@ -1399,7 +1421,11 @@ def main():
         # ["knapsack_hard2_dataset.csv", "H2xiang", 12, 14],
         # ["knapsack_hard2_dataset.csv", "H2pisingerlowdim", 12, 14],
         # ["knapsack_hard2_dataset.csv", "H2pisingerlarge", 8, 22],
-        ## -- Random --
+        # -- Random --
+        # ["knapsack_random_dataset_l0123_40.csv", "RTiny", 12, 14],
+        # ["knapsack_random_dataset_l0123_40.csv", "RSmall", 12, 22],
+        # ["knapsack_random_dataset_l0123_40.csv", "RMedium", 8, 30],
+        # ["knapsack_random_dataset_l0123_40.csv", "RLarge", 8, 600],
         # ["knapsack_random_dataset_l3_50.csv", "RLarge", 8, 600],
     ]
 

@@ -39,6 +39,7 @@ Command-line arguments (all provided as --arg value):
                     2 => Tiny + Small + Medium
                     3 => ONLY Large
                     4 => ONLY Massive
+                    5 => Tiny + Small + Medium + Large
     --seed    : optional integer seed for reproducible sampling of (category,n)
 """
 
@@ -86,16 +87,18 @@ def build_n_list(
         ("Large", 10**6, 10**7),
         ("Massive", 10**8, 10**9),
     ]
-    # level controls how many categories to include: 0..4
+    # level controls how many categories to include: 0..5
     if level is not None:
-        if level < 0 or level > 4:
-            raise ValueError("level must be 0, 1, 2, 3, 4, or omitted")
+        if level < 0 or level > 5:
+            raise ValueError("level must be 0, 1, 2, 3, 4, 5, or omitted")
         if level <= 2:  # 0, 1, 2 are cumulative
             categories = categories[: level + 1]
         elif level == 3:  # Large only
             categories = [categories[3]]
         elif level == 4:  # Massive only
             categories = [categories[4]]
+        elif level == 5:  # Tiny + Small + Medium + Large
+            categories = categories[:4]
 
     # Distribute `total` evenly across the number of included categories.
     num_cats = len(categories)
@@ -187,7 +190,7 @@ def main():
     parser.add_argument(
         "--level",
         type=int,
-        choices=[0, 1, 2, 3, 4],
+        choices=[0, 1, 2, 3, 4, 5],
         default=2,
         help="Which difficulty levels to include (default 2)\n",
     )
