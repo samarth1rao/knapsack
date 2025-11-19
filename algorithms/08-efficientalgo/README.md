@@ -26,3 +26,39 @@ Therefore, the **worst-case time complexity of Algorithm A is exponential**.
 However, the paper's main contribution is showing that its *practical* performance is exceptionally fast. Because the linear-time pegging phase is so effective at reducing the problem size, the "reduced" problem that the exponential branch and bound phase must solve is often very small[cite: 55].
 
 The empirical results show this: 50-variable problems were solved in an average of 4 milliseconds, and 200-variable problems in an average of 7 milliseconds on the test hardware. The algorithm scales very well in practice, far better than competing algorithms of the time[cite: 152].
+
+---
+
+## Space Complexity Analysis
+
+The space complexity of Algorithm A is determined by the following components:
+
+- **Item storage:** $O(n)$ for the list of items and their attributes (weight, value, ratio, index).
+- **Pegging sets:** $O(n)$ for the vectors tracking variables pegged to 0 or 1.
+- **Solution vectors:** $O(n)$ for the current and best solution vectors.
+- **LP relaxation and auxiliary arrays:** $O(n)$ for fractional solution and temporary arrays.
+- **Branch and bound recursion:** $O(n)$ stack depth in the worst case (one per unpegged variable).
+
+**Total space complexity:**
+- $O(n)$ (linear in the number of items)
+- No dependence on knapsack capacity $B$ (unlike DP algorithms)
+- The algorithm is highly space-efficient and suitable for large $n$
+
+---
+
+## Proof of Correctness
+
+Algorithm A is **guaranteed to find the optimal solution** for the 0-1 knapsack problem. The correctness follows from:
+
+1. **LP Relaxation:** The algorithm first solves the linear programming relaxation, which provides an upper bound on the optimal integer solution.
+2. **Lower Bound Heuristics:** It constructs feasible integer solutions using rounding and two greedy heuristics, ensuring a valid lower bound.
+3. **Pegging Tests:** The Lagrangean-based pegging tests are mathematically proven to identify variables that must be 0 or 1 in any optimal solution. Pegged variables are fixed without loss of optimality.
+4. **Reduced Problem:** The remaining unpegged variables form a smaller knapsack problem. The branch and bound procedure explores all feasible combinations, using upper bounds to prune suboptimal branches. This guarantees that no optimal solution is missed.
+5. **Exhaustiveness:** The algorithm considers all possible assignments for unpegged variables, so the global optimum is always found.
+
+**Summary:**
+- The combination of LP relaxation, pegging, and branch and bound ensures that Algorithm A always returns the optimal solution.
+- The correctness is supported by the original paper's mathematical proofs and extensive empirical validation.
+- No approximation or heuristic shortcuts are used in the final solution phase.
+
+---
