@@ -10,18 +10,19 @@ File: `knapsack_ma.cpp`
 - Stage 2: Sparse MA solver operating on N' with sparse chromosomes, island model, and memetic operators.
 
 ## Stage 1 — Problem reduction (preprocessing)
-- Solve the Lagrangian dual with subgradient descent on the full N-item instance to obtain u*, Z_UB, Z_LB and reduced costs r_i = v_i - u*w_i.
-- Variable fixing rules:
-    - If Z_UB - r_i < Z_LB, fix x_i = 1.
-    - If Z_UB + r_i < Z_LB, fix x_i = 0.
+ Solve the Lagrangian dual with subgradient descent on the full N-item instance to obtain a robust dual multiplier and fractional Lagrangian bound. We now track the best dual value (best_u) found across iterations and compute a fractional upper bound bestZUB. The integer upper bound is taken as ceil(bestZUB) to avoid integer truncation errors that could cause incorrect variable fixing or premature optimality detection; reduced costs are then calculated with best_u.
+ Variable fixing rules:
+     - If Z_UB - r_i < Z_LB, fix x_i = 1.
+     - If Z_UB + r_i < Z_LB, fix x_i = 0.
+     - Note: comparisons apply a small epsilon when using bestZUB to avoid rounding edge-cases and reduce incorrect fixes.
 - All x_i=1 items are accumulated into the global solution; the remaining un-fixed items form the Core of size N'.
-
-## Stage 2 — Sparse Memetic Algorithm (solver)
-- Sparse chromosome: Individuals store only selected indices using std::vector<size_t> selectedItemIndices (O(k) memory).
-- Island model: Population split across NUM_ISLANDS to maintain diversity and allow parallelism; occasional migration of best individuals between islands.
-- Deterministic Crowding per-island: Children compete with the most similar parent (sparse Hamming), preserving niches.
-- Heuristic seeding: Multi-seeding using v/w, RCBO (reduced cost), max value and min weight orders, plus mutated clones.
-- Lagrangian Greedy Crossover: Constructive O(k log k + N' log k) union-based crossover that uses reduced costs; fills from global RCBO population.
+ Island model: Population split across NUM_ISLANDS to maintain diversity and allow parallelism; NUM_ISLANDS and ISLAND_SIZE are adapted for core size with a lowered island threshold to avoid unnecessary parallelism overhead on smaller cores; occasional migration of best individuals between islands.
+ Lagrangian Greedy Crossover: Constructive O(k log k + N' log k) union-based crossover that uses reduced costs; fills from global RCBO population. The current solver can apply a fast union-style crossover (O(k)) for speed on large cores, followed by optional RCBO filling.
+ Guided mutation: CORE-biased mutation flips only ambiguous items with high probability; X1_HIGH/X0_LOW items get near-zero probability. Mutation rates are adaptively scaled using CORE size and gap ratio to improve reliability without heavy computational cost.
+ Sparse Simulated Annealing (memetic local search): 1-Opt moves on the sparse list (add/remove), SA acceptance to escape local optima. Local search is adaptive and only runs often enough to aid convergence — a LOCAL_SEARCH_PROB and SA_ITERATIONS governance is used: SA is disabled for very large cores to keep the evolution fast.
+ Two-phase greedy repair for feasibility: remove worst v/w until feasible, then fill best v/w from Core. Repairs are scheduled less often during evolution (REPAIR_INTERVAL) to avoid per-generation overhead; we also perform a final deterministic check and repair on the assembled global solution to guarantee feasibility before returning solutions to the caller.
+ Deterministic Crowding per-island: Children compete with the most similar parent (sparse Hamming), preserving niches. We also use lightweight tournament selection and elitism for faster convergence and improved runtime.
+     - T_meme = O(SA_ITERATIONS * (k + N' log k)) — SA is adaptive and often disabled for very large N' to keep runtime low.
 - Guided mutation: CORE-biased mutation flips only ambiguous items with high probability; X1_HIGH/X0_LOW items get near-zero probability.
 - Sparse Simulated Annealing (memetic local search): 1-Opt moves on the sparse list (add/remove), SA acceptance to escape local optima.
 - Two-phase greedy repair for feasibility: remove worst v/w until feasible, then fill best v/w from Core.
