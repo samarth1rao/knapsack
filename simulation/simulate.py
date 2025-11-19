@@ -52,56 +52,73 @@ class KnapsackSimulator:
                 "executable": self.algorithms_path / "bin" / "bruteforce",
                 "name": "Brute Force",
                 "sort_key": lambda n, w: n,  # 2**n,
+                "millionscale": False,
             },
             "memoization": {
                 "executable": self.algorithms_path / "bin" / "memoization",
                 "name": "Memoization",
                 "sort_key": lambda n, w: n * w,
+                "millionscale": False,
             },
             "dynamicprogramming": {
                 "executable": self.algorithms_path / "bin" / "dynamicprogramming",
                 "name": "Dynamic Programming",
                 "sort_key": lambda n, w: n * w,
+                "millionscale": False,
             },
             "branchandbound": {
                 "executable": self.algorithms_path / "bin" / "branchandbound",
                 "name": "Branch and Bound",
                 "sort_key": lambda n, w: n,
+                "millionscale": False,
             },
             "meetinthemiddle": {
                 "executable": self.algorithms_path / "bin" / "meetinthemiddle",
                 "name": "Meet in the Middle",
                 "sort_key": lambda n, w: n,  # (2 ** (n / 2)) * n,
+                "millionscale": False,
             },
             "greedyheuristic": {
                 "executable": self.algorithms_path / "bin" / "greedyheuristic",
                 "name": "Greedy Heuristic",
                 "sort_key": lambda n, w: n,  # n * np.log(n),
+                "millionscale": True,
             },
             "randompermutation": {
                 "executable": self.algorithms_path / "bin" / "randompermutation",
                 "name": "Random Permutation",
                 "sort_key": lambda n, w: (n**1.5) * w,
+                "millionscale": False,
             },
             "efficientalgo": {
                 "executable": self.algorithms_path / "bin" / "efficientalgo",
                 "name": "Efficient Algorithm",
                 "sort_key": lambda n, w: n,  # n * np.log(n),
+                "millionscale": False,
             },
             "billionscale": {
                 "executable": self.algorithms_path / "bin" / "billionscale",
                 "name": "Billion Scale",
                 "sort_key": lambda n, w: n,  # (n * M) + n * np.log(n),
+                "millionscale": True,
             },
             "geneticalgorithm": {
                 "executable": self.algorithms_path / "bin" / "geneticalgorithm",
                 "name": "Genetic Algorithm",
                 "sort_key": lambda n, w: n,  # n * P * G,
+                "millionscale": True,
             },
             "customalgorithm": {
                 "executable": self.algorithms_path / "bin" / "customalgorithm",
                 "name": "Custom Algorithm",
                 "sort_key": lambda n, w: n,
+                "millionscale": True,
+            },
+            "customtestbed": {
+                "executable": self.algorithms_path / "bin" / "customtestbed",
+                "name": "Custom Testbed",
+                "sort_key": lambda n, w: n,
+                "millionscale": True,
             },
         }
         # Base timeout (seconds) used as part of adaptive timeout calculation
@@ -449,6 +466,10 @@ class KnapsackSimulator:
                 [None] * len(results_df), index=results_df.index, dtype=object
             )
             results_df[f"{algo_name}_optimal"] = False
+            results_df[f"{algo_name}_exceeds_optimum"] = False
+
+        # Add computed_optimum column to track the reference optimum
+        results_df["computed_optimum"] = np.nan
 
         return results_df
 
@@ -536,6 +557,12 @@ class KnapsackSimulator:
                 logger.error(f"Failed to run {algo_display_name}: {e}")
                 continue
 
+        # Compute optimum and calculate accuracy/optimality for all test cases
+        logger.info("=" * 60)
+        logger.info("Computing accuracy and optimality metrics...")
+        logger.info("=" * 60)
+        self._compute_accuracy_and_optimality(results_df)
+
         # Save results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         results_file = self.results_path / f"results_{category}_{timestamp}.csv"
@@ -580,19 +607,44 @@ class KnapsackSimulator:
 
         for algo in algorithms:
             time_col = f"{algo}_time"
-            if time_col in df.columns:
-                # Drop rows without time or n
-                df_valid = df[["n", time_col]].dropna()
-                if df_valid.empty:
-                    continue
-                # Convert microseconds to milliseconds
-                times_ms = df_valid[time_col] / 1000.0
+            exceeds_col = f"{algo}_exceeds_optimum"
+            if time_col not in df.columns:
+                continue
+
+            # Use vectorized operations for filtering
+            time_valid = df[time_col].notna()
+            exceeds_exists = exceeds_col in df.columns
+            exceeds_mask = (
+                df[exceeds_col] if exceeds_exists else pd.Series(False, index=df.index)
+            )
+
+            df_normal = df[time_valid & ~exceeds_mask]
+            df_exceeds = (
+                df[time_valid & exceeds_mask] if exceeds_exists else pd.DataFrame()
+            )
+
+            # Plot normal cases with circles
+            if not df_normal.empty:
                 plt.scatter(
-                    df_valid["n"],
-                    times_ms,
+                    df_normal["n"],
+                    df_normal[time_col] / 1000.0,
                     label=self.algorithms[algo]["name"],
                     s=60,
                     alpha=0.7,
+                    marker="o",
+                )
+
+            # Plot exceeds-optimum cases with red X markers
+            if not df_exceeds.empty:
+                plt.scatter(
+                    df_exceeds["n"],
+                    df_exceeds[time_col] / 1000.0,
+                    s=100,
+                    alpha=0.9,
+                    marker="x",
+                    color="red",
+                    linewidths=3,
+                    label=f"{self.algorithms[algo]['name']} (exceeds optimum!)",
                 )
 
         plt.xlabel("Problem Size (N)", fontsize=12, fontweight="bold")
@@ -600,6 +652,7 @@ class KnapsackSimulator:
         plt.title("Execution Time vs Problem Size", fontsize=14, fontweight="bold")
         plt.legend(fontsize=10)
         plt.grid(True, alpha=0.3)
+        plt.xscale("log")
         plt.yscale("log")
         plt.tight_layout()
         plt.savefig(viz_dir / "time_vs_size.png", dpi=300, bbox_inches="tight")
@@ -612,17 +665,44 @@ class KnapsackSimulator:
         for algo in algorithms:
             time_col = f"{algo}_time"
             cap_col = "capacity"
-            if time_col in df.columns and cap_col in df.columns:
-                df_valid = df[[cap_col, time_col]].dropna()
-                if df_valid.empty:
-                    continue
-                times_ms = df_valid[time_col] / 1000.0
+            exceeds_col = f"{algo}_exceeds_optimum"
+            if time_col not in df.columns or cap_col not in df.columns:
+                continue
+
+            # Use vectorized operations for filtering
+            valid_mask = df[time_col].notna() & df[cap_col].notna()
+            exceeds_exists = exceeds_col in df.columns
+            exceeds_mask = (
+                df[exceeds_col] if exceeds_exists else pd.Series(False, index=df.index)
+            )
+
+            df_normal = df[valid_mask & ~exceeds_mask]
+            df_exceeds = (
+                df[valid_mask & exceeds_mask] if exceeds_exists else pd.DataFrame()
+            )
+
+            # Plot normal cases
+            if not df_normal.empty:
                 plt.scatter(
-                    df_valid[cap_col],
-                    times_ms,
+                    df_normal[cap_col],
+                    df_normal[time_col] / 1000.0,
                     label=self.algorithms[algo]["name"],
                     s=60,
                     alpha=0.7,
+                    marker="o",
+                )
+
+            # Plot exceeds-optimum cases with red X markers
+            if not df_exceeds.empty:
+                plt.scatter(
+                    df_exceeds[cap_col],
+                    df_exceeds[time_col] / 1000.0,
+                    s=100,
+                    alpha=0.9,
+                    marker="x",
+                    color="red",
+                    linewidths=3,
+                    label=f"{self.algorithms[algo]['name']} (exceeds optimum!)",
                 )
 
         plt.xlabel("Knapsack Capacity", fontsize=12, fontweight="bold")
@@ -630,6 +710,7 @@ class KnapsackSimulator:
         plt.title("Execution Time vs Knapsack Capacity", fontsize=14, fontweight="bold")
         plt.legend(fontsize=10)
         plt.grid(True, alpha=0.3)
+        plt.xscale("log")
         plt.yscale("log")
         plt.tight_layout()
         plt.savefig(viz_dir / "time_vs_capacity.png", dpi=300, bbox_inches="tight")
@@ -651,12 +732,55 @@ class KnapsackSimulator:
                     algo_names.append(self.algorithms[algo]["name"])
 
         if accuracies:
-            plt.boxplot(accuracies, labels=algo_names, patch_artist=True)  # pyright: ignore[reportCallIssue]
+            # Calculate dynamic y-axis limits
+            all_values = [val for acc_list in accuracies for val in acc_list]
+            if all_values:
+                min_acc = min(all_values)
+                max_acc = max(all_values)
+                # Add 5% padding on each side
+                range_acc = max_acc - min_acc
+                if range_acc < 1:  # If all values are very close
+                    y_min = max(0, min_acc - 5)
+                    y_max = min(105, max_acc + 5)
+                else:
+                    padding = range_acc * 0.05
+                    y_min = max(0, min_acc - padding)
+                    y_max = min(105, max_acc + padding)
+            else:
+                y_min, y_max = 95, 105
+
+            # Create boxplot with custom styling to show 100% better
+            bp = plt.boxplot(
+                accuracies,
+                labels=algo_names,  # pyright: ignore[reportCallIssue]
+                patch_artist=True,
+                boxprops=dict(facecolor="lightblue", alpha=0.7),
+                medianprops=dict(color="red", linewidth=2),
+                whiskerprops=dict(linewidth=1.5),
+                capprops=dict(linewidth=1.5),
+            )
+
+            # Highlight algorithms at 100% with green boxes
+            for i, acc_list in enumerate(accuracies):
+                if all(abs(val - 100) < 0.01 for val in acc_list):
+                    bp["boxes"][i].set_facecolor("lightgreen")
+                    bp["boxes"][i].set_alpha(0.9)
+
             plt.ylabel("Accuracy (%)", fontsize=12, fontweight="bold")
             plt.title("Solution Quality Distribution", fontsize=14, fontweight="bold")
             plt.grid(True, alpha=0.3, axis="y")
-            plt.ylim([95, 105])
-            plt.axhline(y=100, color="r", linestyle="--", label="Optimal", linewidth=2)
+            plt.ylim([y_min, y_max])
+            plt.axhline(
+                y=100,
+                color="darkgreen",
+                linestyle="--",
+                label="Optimal (100%)",
+                linewidth=2,
+            )
+
+            # Rotate x-axis labels to prevent overlap
+            plt.xticks(rotation=30, ha="right")
+
             plt.legend()
             plt.tight_layout()
             plt.savefig(
@@ -665,28 +789,83 @@ class KnapsackSimulator:
         plt.close()
 
     def _plot_memory(self, df, algorithms, viz_dir):
-        """Plot memory usage"""
+        """Plot memory usage with dynamic unit selection"""
         plt.figure(figsize=(12, 8))
+
+        # Collect all memory values to determine appropriate unit - vectorized
+        mem_cols = [
+            f"{algo}_memory" for algo in algorithms if f"{algo}_memory" in df.columns
+        ]
+        if mem_cols:
+            all_memory_bytes = df[mem_cols].values.flatten()
+            all_memory_bytes = all_memory_bytes[~np.isnan(all_memory_bytes)]
+        else:
+            all_memory_bytes = np.array([])
+
+        # Determine appropriate unit based on max value
+        if len(all_memory_bytes) > 0:
+            max_memory = all_memory_bytes.max()
+            if max_memory < 1024:  # Less than 1 KB
+                unit = "Bytes"
+                divisor = 1
+            elif max_memory < 1024 * 1024:  # Less than 1 MB
+                unit = "KB"
+                divisor = 1024
+            elif max_memory < 1024 * 1024 * 1024:  # Less than 1 GB
+                unit = "MB"
+                divisor = 1024 * 1024
+            else:
+                unit = "GB"
+                divisor = 1024 * 1024 * 1024
+        else:
+            unit = "KB"
+            divisor = 1024
 
         for algo in algorithms:
             mem_col = f"{algo}_memory"
-            if mem_col in df.columns:
-                df_valid = df[["n", mem_col]].dropna()
-                if df_valid.empty:
-                    continue
-                # Convert bytes to KB
-                memory_kb = df_valid[mem_col] / 1024.0
+            exceeds_col = f"{algo}_exceeds_optimum"
+            if mem_col not in df.columns:
+                continue
+
+            # Use vectorized operations for filtering
+            mem_valid = df[mem_col].notna()
+            exceeds_exists = exceeds_col in df.columns
+            exceeds_mask = (
+                df[exceeds_col] if exceeds_exists else pd.Series(False, index=df.index)
+            )
+
+            df_normal = df[mem_valid & ~exceeds_mask]
+            df_exceeds = (
+                df[mem_valid & exceeds_mask] if exceeds_exists else pd.DataFrame()
+            )
+
+            # Plot normal cases
+            if not df_normal.empty:
                 plt.scatter(
-                    df_valid["n"],
-                    memory_kb,
+                    df_normal["n"],
+                    df_normal[mem_col] / divisor,
                     label=self.algorithms[algo]["name"],
                     s=50,
                     marker="s",
                     alpha=0.7,
                 )
 
+            # Plot exceeds-optimum cases with red diamonds
+            if not df_exceeds.empty:
+                plt.scatter(
+                    df_exceeds["n"],
+                    df_exceeds[mem_col] / divisor,
+                    s=100,
+                    marker="D",
+                    alpha=0.9,
+                    color="red",
+                    edgecolors="darkred",
+                    linewidths=2,
+                    label=f"{self.algorithms[algo]['name']} (exceeds optimum!)",
+                )
+
         plt.xlabel("Problem Size (N)", fontsize=12, fontweight="bold")
-        plt.ylabel("Memory Usage (KB)", fontsize=12, fontweight="bold")
+        plt.ylabel(f"Memory Usage ({unit})", fontsize=12, fontweight="bold")
         plt.title("Memory Usage vs Problem Size", fontsize=14, fontweight="bold")
         plt.legend(fontsize=10)
         plt.grid(True, alpha=0.3)
@@ -701,23 +880,48 @@ class KnapsackSimulator:
         for algo in algorithms:
             time_col = f"{algo}_time"
             acc_col = f"{algo}_accuracy"
+            exceeds_col = f"{algo}_exceeds_optimum"
 
-            if time_col in df.columns and acc_col in df.columns:
-                df_valid = df[[time_col, acc_col]].dropna()
-                if df_valid.empty:
-                    continue
+            if time_col not in df.columns or acc_col not in df.columns:
+                continue
 
-                times_ms = df_valid[time_col] / 1000.0
-                accuracies = df_valid[acc_col]
+            # Use vectorized operations for filtering
+            valid_mask = df[time_col].notna() & df[acc_col].notna()
+            exceeds_exists = exceeds_col in df.columns
+            exceeds_mask = (
+                df[exceeds_col] if exceeds_exists else pd.Series(False, index=df.index)
+            )
 
+            df_normal = df[valid_mask & ~exceeds_mask]
+            df_exceeds = (
+                df[valid_mask & exceeds_mask] if exceeds_exists else pd.DataFrame()
+            )
+
+            # Plot normal cases
+            if not df_normal.empty:
                 plt.scatter(
-                    times_ms,
-                    accuracies,
+                    df_normal[time_col] / 1000.0,
+                    df_normal[acc_col],
                     label=self.algorithms[algo]["name"],
                     s=100,
                     alpha=0.6,
                     edgecolors="black",
                     linewidth=1.5,
+                    marker="o",
+                )
+
+            # Plot exceeds-optimum cases with red squares
+            if not df_exceeds.empty:
+                plt.scatter(
+                    df_exceeds[time_col] / 1000.0,
+                    df_exceeds[acc_col],
+                    s=150,
+                    alpha=0.9,
+                    marker="s",
+                    color="red",
+                    edgecolors="darkred",
+                    linewidth=2,
+                    label=f"{self.algorithms[algo]['name']} (exceeds optimum!)",
                 )
 
         plt.xlabel("Execution Time (ms)", fontsize=12, fontweight="bold")
@@ -734,7 +938,7 @@ class KnapsackSimulator:
 
     def _plot_optimality_rate(self, df, algorithms, viz_dir):
         """Plot optimality rate for each algorithm"""
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(12, 6))
 
         algo_names = []
         optimality_rates = []
@@ -778,12 +982,35 @@ class KnapsackSimulator:
                     fontweight="bold",
                 )
 
+            # Rotate x-axis labels to prevent overlap
+            plt.xticks(rotation=30, ha="right")
+
             plt.tight_layout()
             plt.savefig(viz_dir / "optimality_rate.png", dpi=300, bbox_inches="tight")
         plt.close()
 
+    def _format_time(self, time_us):
+        """Format time with appropriate unit"""
+        if time_us < 1000:  # Less than 1 ms
+            return f"{time_us:.1f} us"  # μs"
+        elif time_us < 1_000_000:  # Less than 1 s
+            return f"{time_us / 1000:.3f} ms"
+        else:
+            return f"{time_us / 1_000_000:.3f} s"
+
+    def _format_memory(self, memory_bytes):
+        """Format memory with appropriate unit"""
+        if memory_bytes < 1024:  # Less than 1 KB
+            return f"{memory_bytes:.1f} B"
+        elif memory_bytes < 1024 * 1024:  # Less than 1 MB
+            return f"{memory_bytes / 1024:.2f} KB"
+        elif memory_bytes < 1024 * 1024 * 1024:  # Less than 1 GB
+            return f"{memory_bytes / (1024 * 1024):.2f} MB"
+        else:
+            return f"{memory_bytes / (1024 * 1024 * 1024):.2f} GB"
+
     def _create_summary_table(self, df, algorithms, viz_dir):
-        """Create summary statistics table"""
+        """Create summary statistics table with dynamic units"""
         summary_data = []
 
         for algo in algorithms:
@@ -796,9 +1023,9 @@ class KnapsackSimulator:
                 algo_name = self.algorithms[algo]["name"]
                 # Use dropna to avoid None/NaN interfering with stats
                 times = pd.to_numeric(df[time_col], errors="coerce").dropna()
-                avg_time_ms = (times.mean() / 1000.0) if not times.empty else 0
-                max_time_ms = (times.max() / 1000.0) if not times.empty else 0
-                min_time_ms = (times.min() / 1000.0) if not times.empty else 0
+                avg_time_us = times.mean() if not times.empty else 0
+                max_time_us = times.max() if not times.empty else 0
+                min_time_us = times.min() if not times.empty else 0
                 avg_accuracy = (
                     pd.to_numeric(df[acc_col], errors="coerce").dropna().mean()
                     if acc_col in df.columns
@@ -809,7 +1036,7 @@ class KnapsackSimulator:
                     if mem_col in df.columns
                     else pd.Series(dtype=float)
                 )
-                avg_memory_kb = (mems.mean() / 1024.0) if not mems.empty else 0
+                avg_memory_bytes = mems.mean() if not mems.empty else 0
                 optimality_rate = (
                     (
                         pd.to_numeric(df[opt_col], errors="coerce").fillna(0).sum()
@@ -823,11 +1050,11 @@ class KnapsackSimulator:
                 summary_data.append(
                     {
                         "Algorithm": algo_name,
-                        "Avg Time (ms)": f"{avg_time_ms:.3f}",
-                        "Min Time (ms)": f"{min_time_ms:.3f}",
-                        "Max Time (ms)": f"{max_time_ms:.3f}",
+                        "Avg Time": self._format_time(avg_time_us),
+                        "Min Time": self._format_time(min_time_us),
+                        "Max Time": self._format_time(max_time_us),
                         "Avg Accuracy (%)": f"{avg_accuracy:.2f}",
-                        "Avg Memory (KB)": f"{avg_memory_kb:.2f}",
+                        "Avg Memory": self._format_memory(avg_memory_bytes),
                         "Optimality Rate (%)": f"{optimality_rate:.1f}",
                     }
                 )
@@ -838,7 +1065,7 @@ class KnapsackSimulator:
         summary_df.to_csv(viz_dir / "summary_statistics.csv", index=False)
 
         # Create visual table
-        fig, ax = plt.subplots(figsize=(14, len(summary_data) * 0.8 + 2))
+        fig, ax = plt.subplots(figsize=(12, len(summary_data) * 0.5 + 1.5))
         ax.axis("tight")
         ax.axis("off")
 
@@ -847,12 +1074,12 @@ class KnapsackSimulator:
             colLabels=summary_df.columns.tolist(),
             cellLoc="center",
             loc="center",
-            colWidths=[0.15] * len(summary_df.columns),
+            colWidths=[0.2, 0.12, 0.12, 0.12, 0.16, 0.12, 0.16],
         )
 
         table.auto_set_font_size(False)
         table.set_fontsize(10)
-        table.scale(1, 2)
+        table.scale(1, 1.5)
 
         # Style header
         for i in range(len(summary_df.columns)):
@@ -875,6 +1102,97 @@ class KnapsackSimulator:
         logger.info("Summary Statistics:")
         for line in summary_df.to_string(index=False).split("\n"):
             logger.info(line)
+
+    def _compute_accuracy_and_optimality(self, results_df):
+        """Compute accuracy and optimality after all algorithms have run"""
+        over_optimum_cases = []  # Track cases where algo exceeds optimum
+
+        # Pre-compile list of algorithm value columns that exist
+        algo_value_cols = {
+            algo_name: f"{algo_name}_value"
+            for algo_name in self.algorithms
+            if f"{algo_name}_value" in results_df.columns
+        }
+
+        for idx in results_df.index:
+            row = results_df.loc[idx]
+
+            # Determine the reference optimum
+            if pd.notna(row.get("best_price")):
+                # Use known optimum if available
+                reference_optimum = row["best_price"]
+            else:
+                # Use maximum value returned by any algorithm - vectorized
+                algo_values = [
+                    row[col] for col in algo_value_cols.values() if pd.notna(row[col])
+                ]
+
+                if algo_values:
+                    reference_optimum = max(algo_values)
+                else:
+                    # No algorithms produced results for this test case
+                    continue
+
+            # Store the computed optimum
+            results_df.at[idx, "computed_optimum"] = reference_optimum
+
+            # Calculate accuracy and optimality for each algorithm
+            for algo_name, value_col in algo_value_cols.items():
+                if not pd.notna(row[value_col]):
+                    continue
+
+                algo_value = row[value_col]
+
+                # Check if algorithm exceeded the optimum
+                exceeds_optimum = algo_value > reference_optimum + 1e-9
+                if exceeds_optimum:
+                    over_optimum_cases.append(
+                        {
+                            "test_id": idx,
+                            "algorithm": self.algorithms[algo_name]["name"],
+                            "algo_value": algo_value,
+                            "optimum": reference_optimum,
+                            "excess": algo_value - reference_optimum,
+                            "n": row["n"],
+                            "capacity": row["capacity"],
+                        }
+                    )
+                    logger.warning(
+                        f"⚠️  Algorithm {self.algorithms[algo_name]['name']} EXCEEDED optimum "
+                        f"for test_id={idx}: got {algo_value}, optimum={reference_optimum} "
+                        f"(excess: {algo_value - reference_optimum})"
+                    )
+
+                # Calculate accuracy
+                if reference_optimum == 0:
+                    accuracy = 100.0 if algo_value == 0 else 0.0
+                else:
+                    # Cap accuracy at 100% for display, but preserve the over-optimum flag
+                    accuracy = min(100.0, (algo_value / reference_optimum * 100.0))
+
+                # Determine optimality
+                is_optimal = abs(algo_value - reference_optimum) < 1e-9
+
+                # Store results
+                results_df.at[idx, f"{algo_name}_accuracy"] = accuracy
+                results_df.at[idx, f"{algo_name}_optimal"] = is_optimal
+                results_df.at[idx, f"{algo_name}_exceeds_optimum"] = exceeds_optimum
+
+        logger.info("Accuracy and optimality metrics computed for all test cases.")
+
+        if over_optimum_cases:
+            logger.error("=" * 60)
+            logger.error(
+                f"⚠️  FOUND {len(over_optimum_cases)} CASES WHERE ALGORITHMS EXCEEDED OPTIMUM"
+            )
+            logger.error("=" * 60)
+            for case in over_optimum_cases:
+                logger.error(
+                    f"  Test {case['test_id']}: {case['algorithm']} "
+                    f"got {case['algo_value']} vs optimum {case['optimum']} "
+                    f"(+{case['excess']:.2f}, n={case['n']}, capacity={case['capacity']})"
+                )
+            logger.error("=" * 60)
 
     def _prepare_run_order(self, df):
         """Pre-calculates the run order for all algorithms."""
@@ -909,6 +1227,7 @@ class KnapsackSimulator:
     ):
         """Run algorithm tests in parallel with batching and failure tracking"""
         algo_display_name = self.algorithms[algo_name]["name"]
+        is_millionscale = self.algorithms[algo_name]["millionscale"]
         semaphore = asyncio.Semaphore(max_parallel)
 
         total_tests = len(sorted_indices)
@@ -941,6 +1260,15 @@ class KnapsackSimulator:
                     return None
 
                 row = df.loc[idx]
+
+                # Skip non-millionscale algorithms for n > 1e6
+                if row["n"] > 1e6 and not is_millionscale:
+                    logger.info(
+                        f"{test_num}/{total_tests}: SKIPPING test_id={idx}, n={row['n']} "
+                        f"(n > 1e6, algorithm is not millionscale)"
+                    )
+                    return None
+
                 logger.info(
                     f"{test_num}/{total_tests}: test_id={idx}, n={row['n']}, capacity={row['capacity']}"
                 )
@@ -957,15 +1285,7 @@ class KnapsackSimulator:
 
                 async with failures_lock:
                     if result:
-                        if row["best_price"] == 0:
-                            accuracy = 100.0 if result["max_value"] == 0 else 0.0
-                        else:
-                            accuracy = min(
-                                100.0, (result["max_value"] / row["best_price"] * 100.0)
-                            )
-
-                        is_optimal = abs(result["max_value"] - row["best_price"]) < 1e-9
-
+                        # Store the raw results without calculating accuracy/optimality yet
                         results_df.at[idx, f"{algo_name}_value"] = result["max_value"]
                         results_df.at[idx, f"{algo_name}_time"] = result[
                             "execution_time"
@@ -976,12 +1296,10 @@ class KnapsackSimulator:
                         results_df.at[idx, f"{algo_name}_items"] = result[
                             "selected_items"
                         ]
-                        results_df.at[idx, f"{algo_name}_accuracy"] = accuracy
-                        results_df.at[idx, f"{algo_name}_optimal"] = is_optimal
 
                         logger.info(
                             f"  -> {test_num}/{total_tests} Value: {result['max_value']}, "
-                            f"Time: {result['execution_time']}μs, Accuracy: {accuracy:.2f}%, Optimal: {is_optimal}"
+                            f"Time: {result['execution_time']}us"  # μs"
                         )
                         return True
                     else:
@@ -1090,19 +1408,25 @@ def main():
         # ["knapsack_easy_dataset_l012_400.csv", "ETiny", 12, 14],
         # ["knapsack_easy_dataset_l012_400.csv", "ESmall", 12, 22],
         # ["knapsack_easy_dataset_l012_400.csv", "EMedium", 8, 30],
-        # ["knapsack_easy_dataset_l3_40.csv", "ELarge", 8, 600],
+        # ["knapsack_easy_dataset_l3_50.csv", "ELarge", 8, 600],
         # -- Trap --
         # ["knapsack_trap_dataset_l012_400.csv", "TTiny", 12, 14],
         # ["knapsack_trap_dataset_l012_400.csv", "TSmall", 12, 22],
         # ["knapsack_trap_dataset_l012_400.csv", "TMedium", 8, 30],
-        # ["knapsack_trap_dataset_l3_40.csv", "TLarge", 8, 600],
+        # ["knapsack_trap_dataset_l3_50.csv", "TLarge", 8, 600],
         # -- Hard1 --
-        # ["knapsack_hard1_dataset.csv", "H1known", 8, 8],
-        # ["knapsack_hard1_dataset.csv", "H1unknown", 8, 8],
+        # ["knapsack_hard1_dataset.csv", "H1known", 12, 14],
+        # ["knapsack_hard1_dataset.csv", "H1unknown", 12, 14],
         # -- Hard2 --
         # ["knapsack_hard2_dataset.csv", "H2xiang", 12, 14],
         # ["knapsack_hard2_dataset.csv", "H2pisingerlowdim", 12, 14],
         # ["knapsack_hard2_dataset.csv", "H2pisingerlarge", 8, 22],
+        # -- Random --
+        # ["knapsack_random_dataset_l0123_40.csv", "RTiny", 12, 14],
+        # ["knapsack_random_dataset_l0123_40.csv", "RSmall", 12, 22],
+        # ["knapsack_random_dataset_l0123_40.csv", "RMedium", 8, 30],
+        # ["knapsack_random_dataset_l0123_40.csv", "RLarge", 8, 600],
+        # ["knapsack_random_dataset_l3_50.csv", "RLarge", 8, 600],
     ]
 
     # Create simulator
@@ -1128,9 +1452,15 @@ def main():
             memory_limit_gb=memory_limit_gb,
         )
 
-        # Create visualisations
-        logger.info("Generating visualisations...")
-        simulator.create_visualisations(results_df, category=category)
+        # Create visualisations only if we have results
+        if results_df is not None and not results_df.empty:
+            logger.info("Generating visualisations...")
+            simulator.create_visualisations(results_df, category=category)
+        else:
+            logger.warning(
+                "No results to visualise for category %s (check dataset and runs).",
+                category,
+            )
 
     logger.info("=" * 60)
     logger.info("All simulations completed successfully!")

@@ -1,7 +1,7 @@
 """Generate knapsack problems dataset using a C++ worker.
 
 This script orchestrates the generation of a dataset of 0/1 knapsack problems.
-It can generate either "easy" or "trap" problems via a command-line argument.
+It can generate "easy", "trap", or "random" problems via a command-line argument.
 
 "Easy" problems: have a known optimal solution where the selected items have
 much better price/weight ratios.
@@ -9,6 +9,10 @@ much better price/weight ratios.
 "Trap" problems: are hard by construction with a known optimal solution but
 are designed to "trap" greedy (price/weight ratio) algorithms into finding
 a sub-optimal one.
+
+"Random" problems: use a class-based structure with items centered around
+fractions of capacity (1/2, 1/4, 1/8, etc.) plus noise, along with small items.
+No pre-computed optimal solution.
 
 This script's roles:
 1.  Parse command-line arguments (mode, total, level, seed, etc.).
@@ -20,12 +24,14 @@ The C++ worker's role:
 1.  Receive params from this script.
         easy: category, n, seed
         trap: category, n, capacity, seed
+        random: category, n, capacity, seed
 2.  Generate a single instance.
 3.  Append that single instance as a row to the CSV.
 
 Command-line arguments (all provided as --arg value):
-    --mode    : problem mode - "easy" or "trap" (default: easy)
-    --out     : output CSV path (default: knapsack_easy_dataset.csv or knapsack_trap_dataset.csv resp.)
+    --mode    : problem mode - "easy", "trap", or "random" (default: easy)
+    --out     : output CSV path (default: knapsack_easy_dataset.csv, knapsack_trap_dataset.csv,
+                    or knapsack_random_dataset.csv resp.)
     --total   : total number of problems to generate (default: 100)
     --level   : maximum difficulty level to include (default: 2)
                     0 => Tiny only
@@ -33,6 +39,7 @@ Command-line arguments (all provided as --arg value):
                     2 => Tiny + Small + Medium
                     3 => ONLY Large
                     4 => ONLY Massive
+                    5 => Tiny + Small + Medium + Large
     --seed    : optional integer seed for reproducible sampling of (category,n)
 """
 
@@ -80,16 +87,18 @@ def build_n_list(
         ("Large", 10**6, 10**7),
         ("Massive", 10**8, 10**9),
     ]
-    # level controls how many categories to include: 0..4
+    # level controls how many categories to include: 0..5
     if level is not None:
-        if level < 0 or level > 4:
-            raise ValueError("level must be 0, 1, 2, 3, 4, or omitted")
+        if level < 0 or level > 5:
+            raise ValueError("level must be 0, 1, 2, 3, 4, 5, or omitted")
         if level <= 2:  # 0, 1, 2 are cumulative
             categories = categories[: level + 1]
         elif level == 3:  # Large only
             categories = [categories[3]]
         elif level == 4:  # Massive only
             categories = [categories[4]]
+        elif level == 5:  # Tiny + Small + Medium + Large
+            categories = categories[:4]
 
     # Distribute `total` evenly across the number of included categories.
     num_cats = len(categories)
@@ -163,14 +172,14 @@ def main():
     )
     parser.add_argument(
         "--mode",
-        choices=["easy", "trap"],
+        choices=["easy", "trap", "random"],
         default="easy",
-        help="Problem mode: 'easy' or 'trap' (default: easy)",
+        help="Problem mode: 'easy', 'trap', or 'random' (default: easy)",
     )
     parser.add_argument(
         "--out",
         default=None,
-        help="Output CSV path (default: data/knapsack_trap_dataset.csv or data/knapsack_easy_dataset.csv)",
+        help="Output CSV path (default: data/knapsack_easy_dataset.csv, data/knapsack_trap_dataset.csv, or data/knapsack_random_dataset.csv)",
     )
     parser.add_argument(
         "--total",
@@ -181,7 +190,7 @@ def main():
     parser.add_argument(
         "--level",
         type=int,
-        choices=[0, 1, 2, 3, 4],
+        choices=[0, 1, 2, 3, 4, 5],
         default=2,
         help="Which difficulty levels to include (default 2)\n",
     )
@@ -195,6 +204,8 @@ def main():
             args.out = script_dir / "knapsack_easy_dataset.csv"
         elif args.mode == "trap":
             args.out = script_dir / "knapsack_trap_dataset.csv"
+        elif args.mode == "random":
+            args.out = script_dir / "knapsack_random_dataset.csv"
         else:
             print(f"Error: Unknown mode '{args.mode}'", file=sys.stderr)
             sys.exit(1)
@@ -208,6 +219,9 @@ def main():
     elif args.mode == "trap":
         cpp_src_file = "generate_trap_instance.cpp"
         cpp_exe_file = "generate_trap_instance"
+    elif args.mode == "random":
+        cpp_src_file = "generate_random_instance.cpp"
+        cpp_exe_file = "generate_random_instance"
     else:
         print(f"Error: Unknown mode '{args.mode}'", file=sys.stderr)
         sys.exit(1)
@@ -237,16 +251,27 @@ def main():
         return
 
     # --- 3. Initialise CSV File and Header ---
-    fields = [
-        "category",
-        "n",
-        "weights",
-        "prices",
-        "capacity",
-        "best_picks",
-        "best_price",
-        "seed",
-    ]
+    # Random mode has different fields (no best_picks or best_price)
+    if args.mode == "random":
+        fields = [
+            "category",
+            "n",
+            "weights",
+            "prices",
+            "capacity",
+            "seed",
+        ]
+    else:
+        fields = [
+            "category",
+            "n",
+            "weights",
+            "prices",
+            "capacity",
+            "best_picks",
+            "best_price",
+            "seed",
+        ]
 
     # Ensure output directory exists
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -262,7 +287,7 @@ def main():
         sys.exit(1)
 
     # --- 4. Main Generation Loop (Call C++) ---
-    mode_str = "trap" if args.mode == "trap" else "easy"
+    mode_str = args.mode
     print(f"Generating {len(specs)} {mode_str} problem instances into {args.out}...")
     for i, spec in enumerate(specs):
         cat = spec["category"]
@@ -273,9 +298,9 @@ def main():
         if args.mode == "easy":
             # Easy mode does not require capacity
             cmd = [str(cpp_exe_path), str(args.out), cat, str(n), str(seed)]
-        elif args.mode == "trap":
+        elif args.mode == "trap" or args.mode == "random":
             capacity = 0
-            # Trap mode requires capacity parameter
+            # Trap and random modes require capacity parameter
             if cat == "Tiny":
                 capacity = 100_000
             elif cat == "Small":

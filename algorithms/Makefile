@@ -14,7 +14,7 @@ ALGO_DIRS = 01-bruteforce 02-memoization 03-dynamicprogramming 04-branchandbound
 TARGETS = $(TARGET_DIR)/bruteforce $(TARGET_DIR)/memoization $(TARGET_DIR)/dynamicprogramming \
 	$(TARGET_DIR)/branchandbound $(TARGET_DIR)/meetinthemiddle $(TARGET_DIR)/greedyheuristic \
 	$(TARGET_DIR)/randompermutation $(TARGET_DIR)/efficientalgo $(TARGET_DIR)/billionscale \
-	$(TARGET_DIR)/geneticalgorithm $(TARGET_DIR)/customalgorithm
+	$(TARGET_DIR)/geneticalgorithm $(TARGET_DIR)/customalgorithm $(TARGET_DIR)/customtestbed
 
 # Create bin directory if it doesn't exist
 $(shell mkdir -p $(TARGET_DIR))
@@ -91,6 +91,12 @@ $(TARGET_DIR)/customalgorithm: 11-customalgorithm/customalgorithm.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $<
 	@echo "Custom Algorithm compiled successfully!"
 
+# 12-customtestbed
+$(TARGET_DIR)/customtestbed: 12-customtestbed/customtestbed.cpp
+	@echo "Compiling Custom Testbed algorithm..."
+	$(CXX) $(CXXFLAGS) -o $@ $<
+	@echo "Custom Testbed compiled successfully!"
+
 # Convenience single-target aliases
 bruteforce: $(TARGET_DIR)/bruteforce
 memoization: $(TARGET_DIR)/memoization
@@ -103,6 +109,7 @@ efficientalgo: $(TARGET_DIR)/efficientalgo
 billionscale: $(TARGET_DIR)/billionscale
 geneticalgorithm: $(TARGET_DIR)/geneticalgorithm
 customalgorithm: $(TARGET_DIR)/customalgorithm
+customtestbed: $(TARGET_DIR)/customtestbed
 
 clean:
 	@echo "Cleaning compiled binaries..."
